@@ -1,8 +1,7 @@
 [workspace]
 
 members = [
-  "gateway",
-  "rpclib",
+  "userd",
   "cloudcfg",
-  "cloudadm",
+  "cloudadm"
 ]
