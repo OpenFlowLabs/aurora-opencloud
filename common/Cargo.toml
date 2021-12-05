@@ -1,20 +1,15 @@
 [package]
-name = "cloudcfg"
+name = "common"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
-tonic = "0.6"
-prost = "0.9"
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 slog = "2.5"
 slog-term = "2.5"
+slog-scope = "4.4.0"
+slog-stdlog = "4.1.0"
 atty = "0.2"
 failure = "0.1"
 failure_derive = "0.1"
-
-[build-dependencies]
-tonic-build = "0.6"

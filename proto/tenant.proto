@@ -1,0 +1,28 @@
+syntax = "proto3";
+package tenant;
+
+
+service Tenant {
+        // A small rpc to ping to make sure we are connected, but also
+        // to help make a fast development function
+        rpc Ping(PingMsg) returns (PongMsg);
+}
+
+message PingMsg {
+        // Who has pinged the server
+        string sender = 1;
+}
+
+
+
+message PongMsg {
+        // Smallest possible success message. I don't think we need to set it
+        // to anything else than Success but Nice to have a way to tell a bit of a
+        // status
+        enum Status {
+             SUCCESS = 0;
+             ERROR = 1;
+             MAINTENANCE = 2;
+        }
+        Status status = 1;
+}

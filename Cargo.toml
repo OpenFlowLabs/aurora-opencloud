@@ -3,5 +3,7 @@
 members = [
   "userd",
   "cloudcfg",
-  "cloudadm"
+  "cloudadm",
+  "tenantd",
+  "common"
 ]
