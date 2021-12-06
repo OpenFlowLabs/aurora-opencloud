@@ -13,8 +13,6 @@ message PingMsg {
         string sender = 1;
 }
 
-
-
 message PongMsg {
         // Smallest possible success message. I don't think we need to set it
         // to anything else than Success but Nice to have a way to tell a bit of a

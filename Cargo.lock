@@ -275,13 +275,8 @@ version = "0.1.0"
 name = "cloudcfg"
 version = "0.1.0"
 dependencies = [
- "atty",
  "common",
- "failure",
- "failure_derive",
  "prost",
- "slog",
- "slog-term",
  "tokio",
  "tonic",
  "tonic-build",
