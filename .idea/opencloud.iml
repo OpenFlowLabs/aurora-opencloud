@@ -8,7 +8,13 @@
       <sourceFolder url="file://$MODULE_DIR$/gateway/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rpclib/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/userd/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tenantd/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/cloudcfg/target" />
+      <excludeFolder url="file://$MODULE_DIR$/common/target" />
+      <excludeFolder url="file://$MODULE_DIR$/tenantd/target" />
+      <excludeFolder url="file://$MODULE_DIR$/userd/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

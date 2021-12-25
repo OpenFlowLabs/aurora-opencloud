@@ -1,6 +1,10 @@
+pub mod permission;
+pub mod schema;
 pub mod tenant;
 pub mod user;
-pub mod schema;
-pub mod policy;
-pub mod common;
-pub mod permission;
+
+use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::PgConnection;
+use std::sync::Arc;
+
+pub type PGPool = Arc<Pool<ConnectionManager<PgConnection>>>;

@@ -14,13 +14,13 @@ diesel = { version = "1.4.6",  default-features=true, features = ["uuidv07", "r2
 dotenv = "0.15.0"
 uuid = { version = "0.8", features = ["v4"] }
 log = "0.4"
-fern = "0.6"
 chrono = "0.4.19"
 pwhash = "1.0.0"
 rand = "0.8.3"
 josekit = "0.7.1"
 serde_json = "1.0.64"
-
+failure = "0.1"
+failure_derive = "0.1"
 
 [build-dependencies]
 tonic-build = "0.6"

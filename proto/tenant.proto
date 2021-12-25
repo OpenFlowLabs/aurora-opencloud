@@ -6,6 +6,20 @@ service Tenant {
         // A small rpc to ping to make sure we are connected, but also
         // to help make a fast development function
         rpc Ping(PingMsg) returns (PongMsg);
+
+        // Tenant CRUD
+        rpc ListTenants(ListRequest) returns (ListTenantResponse);
+        rpc GetTenant(GetRequest) returns (TenantResponseSchema);
+        rpc CreateTenant(OperationRequest) returns (OperationResponse);
+        rpc UpdateTenant(OperationRequest) returns (OperationResponse);
+        rpc DeleteTenant(OperationRequest) returns (OperationResponse);
+
+        // User CRUD
+        rpc ListUsers(ListRequest) returns (ListUserResponse);
+        rpc GetUser(GetRequest) returns (UserResponseSchema);
+        rpc CreateUser(OperationRequest) returns (OperationResponse);
+        rpc UpdateUser(OperationRequest) returns (OperationResponse);
+        rpc DeleteUser(OperationRequest) returns (OperationResponse);
 }
 
 message PingMsg {
@@ -24,3 +38,111 @@ message PongMsg {
         }
         Status status = 1;
 }
+
+message OperationRequest {
+  // id on which to perform the operation
+  // will be ignored for create but is mandatory on change operations
+  // set if your API endpoint needs it.
+  string uuid = 1;
+  // the serialized modification data to apply.
+  oneof object_schema {
+    TenantOperationRequestSchema tenant = 2;
+    UserOperationRequestSchema user = 3;
+  }
+}
+
+message TenantOperationRequestSchema {
+  string name = 1;
+}
+
+message UserOperationRequestSchema {
+  // tenant id
+  string tenant_id = 1;
+  // username
+  string username = 2;
+  // password of the new user
+  string password = 3;
+  // email for the user
+  string email = 4;
+}
+
+message OperationResponse {
+  // enum describing the kind of return
+  enum Status {
+    SUCCESS = 0;
+    ERROR = 1;
+    MAINTENANCE = 2;
+  }
+  Status status = 1;
+  // an additional status message about the operation performed only set if there was an error
+  // optional
+  string response_message = 2;
+  // serialized bytes of the Result of the operation
+  // This allows to reduce API calls as the client can parse this field optionally if needed
+  // If one wants client control over this use the boolean return result object
+  oneof object {
+      UserResponseSchema user = 3;
+      TenantResponseSchema tenant =4;
+  }
+}
+
+message UserResponseSchema {
+  // tenant id
+  string tenant_id = 1;
+  string uuid = 2;
+  string username = 3;
+  string email = 4;
+  bool email_confirmed = 5;
+}
+
+message TenantResponseSchema {
+  // tenant id
+  string uuid = 1;
+  string name = 2;
+}
+
+
+message ListRequest {
+  // limit of amount of records to return
+  uint64 limit = 1;
+  // offeset after which entry to return results
+  uint64 offset = 2;
+  // filter to filter entities by
+  oneof filter {
+    UserFilter user = 3;
+    TenantFilter tenant = 4;
+  }
+}
+
+message GetRequest {
+  // filter to filter entities by
+  oneof filter {
+    UserFilter user = 3;
+    TenantFilter tenant = 4;
+  }
+}
+
+message UserFilter {
+  // tenant (this is mandatory)
+  string tenant_id = 1;
+  // email, either this or username needs to be set
+  string email = 2;
+  // username, either this or email needs to be set
+  string username = 3;
+}
+
+message TenantFilter {
+  // name of the tenant
+  string name = 1;
+}
+
+message ListTenantResponse {
+  repeated TenantResponseSchema tenant = 2;
+}
+
+message ListUserResponse {
+  repeated UserResponseSchema tenant = 2;
+}
+
+
+

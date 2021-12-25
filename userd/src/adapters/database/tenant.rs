@@ -1,17 +1,14 @@
+use crate::database::schema::tenants;
+use crate::database::PGPool;
+use common::*;
 use diesel::prelude::*;
-use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, Pool};
-use crate::services::tenant::Tenant;
-use crate::adapters::database::schema::tenants;
-use juniper::FieldResult;
-use crate::adapters::database::common::PGPool;
 
 pub struct TenantRepository {
-    pool: PGPool
+    pool: PGPool,
 }
 
 impl TenantRepository {
-    pub fn get_tenant(&self, name: &str) -> FieldResult<Tenant> {
+    pub fn get_tenant(&self, name: &str) -> Result<Tenant> {
         let tenant = tenants::table
             .filter(tenants::name.eq(name))
             .limit(1)
@@ -19,7 +16,7 @@ impl TenantRepository {
         Ok(tenant)
     }
 
-    pub fn tenants(&self, limit: usize, offset: usize) -> FieldResult<Vec<Tenant>> {
+    pub fn tenants(&self, limit: usize, offset: usize) -> Result<Vec<Tenant>> {
         let results: Vec<Tenant>;
         if offset != 0 && limit != 0 {
             results = tenants::table
@@ -31,14 +28,13 @@ impl TenantRepository {
                 .limit(limit as i64)
                 .load::<Tenant>(&self.pool.get()?)?;
         } else {
-            results = tenants::table
-                .load::<Tenant>(&self.pool.get()?)?;
+            results = tenants::table.load::<Tenant>(&self.pool.get()?)?;
         }
 
         Ok(results)
     }
 
-    pub fn add_tenant(&self, tenant: &NewTenant) -> FieldResult<Tenant> {
+    pub fn add_tenant(&self, tenant: &NewTenant) -> Result<Tenant> {
         let results = diesel::insert_into(tenants::table)
             .values(tenant)
             .get_result(&self.pool.get()?)?;
@@ -46,14 +42,17 @@ impl TenantRepository {
     }
 
     pub fn new(pool: PGPool) -> Self {
-        TenantRepository{
-            pool,
-        }
+        TenantRepository { pool }
     }
 }
 
 #[derive(Insertable)]
-#[table_name="tenants"]
+#[table_name = "tenants"]
 pub struct NewTenant<'a> {
     pub name: &'a String,
+}
+
+pub struct Tenant {
+    pub id: Uuid,
+    pub name: String,
 }

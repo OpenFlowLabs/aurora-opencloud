@@ -1,59 +1,66 @@
+use crate::database::schema::tenants;
+use crate::database::schema::tenants::dsl::*;
+use crate::database::PGPool;
+use common::*;
 use diesel::prelude::*;
-use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, Pool};
-use crate::services::tenant::Tenant;
-use crate::adapters::database::schema::tenants;
-use juniper::FieldResult;
-use crate::adapters::database::common::PGPool;
+use uuid::Uuid;
 
-pub struct TenantRepository {
-    pool: PGPool
+pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Fallible<TenantResponse> {
+    let tenant = tenants::table
+        .filter(tenants::name.eq(tenant_name))
+        .limit(1)
+        .first::<TenantResponse>(&pool.get()?)?;
+    Ok(tenant)
 }
 
-impl TenantRepository {
-    pub fn get_tenant(&self, name: &str) -> FieldResult<Tenant> {
-        let tenant = tenants::table
-            .filter(tenants::name.eq(name))
-            .limit(1)
-            .first::<Tenant>(&self.pool.get()?)?;
-        Ok(tenant)
+pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Fallible<Vec<TenantResponse>> {
+    let results: Vec<TenantResponse>;
+    if offset != 0 && limit != 0 {
+        results = tenants::table
+            .limit(limit as i64)
+            .offset(offset as i64)
+            .load::<TenantResponse>(&pool.get()?)?;
+    } else if limit != 0 {
+        results = tenants::table
+            .limit(limit as i64)
+            .load::<TenantResponse>(&pool.get()?)?;
+    } else {
+        results = tenants::table.load::<TenantResponse>(&pool.get()?)?;
     }
 
-    pub fn tenants(&self, limit: usize, offset: usize) -> FieldResult<Vec<Tenant>> {
-        let results: Vec<Tenant>;
-        if offset != 0 && limit != 0 {
-            results = tenants::table
-                .limit(limit as i64)
-                .offset(offset as i64)
-                .load::<Tenant>(&self.pool.get()?)?;
-        } else if limit != 0 {
-            results = tenants::table
-                .limit(limit as i64)
-                .load::<Tenant>(&self.pool.get()?)?;
-        } else {
-            results = tenants::table
-                .load::<Tenant>(&self.pool.get()?)?;
-        }
-
-        Ok(results)
-    }
-
-    pub fn add_tenant(&self, tenant: &NewTenant) -> FieldResult<Tenant> {
-        let results = diesel::insert_into(tenants::table)
-            .values(tenant)
-            .get_result(&self.pool.get()?)?;
-        Ok(results)
-    }
-
-    pub fn new(pool: PGPool) -> Self {
-        TenantRepository{
-            pool,
-        }
-    }
+    Ok(results)
 }
 
-#[derive(Insertable)]
-#[table_name="tenants"]
-pub struct NewTenant<'a> {
+pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Fallible<TenantResponse> {
+    let target = tenants.find(uuid);
+    let resp = diesel::update(target)
+        .set(input)
+        .get_result::<TenantResponse>(&pool.get()?)?;
+
+    Ok(resp)
+}
+
+pub fn create_tenant(pool: &PGPool, tenant: &TenantInput) -> Fallible<TenantResponse> {
+    let results = diesel::insert_into(tenants::table)
+        .values(tenant)
+        .get_result(&pool.get()?)?;
+    Ok(results)
+}
+
+pub fn delete_tenant(pool: &PGPool, tenant_id: &Uuid) -> Fallible<()> {
+    let target = tenants.find(tenant_id);
+    diesel::delete(target).execute(&pool.get()?)?;
+    Ok(())
+}
+
+#[derive(Insertable, AsChangeset)]
+#[table_name = "tenants"]
+pub struct TenantInput<'a> {
     pub name: &'a String,
+}
+
+#[derive(Queryable, Debug)]
+pub struct TenantResponse {
+    pub id: Uuid,
+    pub name: String,
 }
