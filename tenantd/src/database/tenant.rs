@@ -32,7 +32,7 @@ pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Fallible<Vec<Tena
 }
 
 pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Fallible<TenantResponse> {
-    let target = tenants.find(uuid);
+    let target = tenants::table.find(uuid);
     let resp = diesel::update(target)
         .set(input)
         .get_result::<TenantResponse>(&pool.get()?)?;
@@ -55,8 +55,8 @@ pub fn delete_tenant(pool: &PGPool, tenant_id: &Uuid) -> Fallible<()> {
 
 #[derive(Insertable, AsChangeset)]
 #[table_name = "tenants"]
-pub struct TenantInput<'a> {
-    pub name: &'a String,
+pub struct TenantInput {
+    pub name: String,
 }
 
 #[derive(Queryable, Debug)]

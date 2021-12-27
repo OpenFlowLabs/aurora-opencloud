@@ -182,12 +182,34 @@ pub struct TenantFilter {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListTenantResponse {
     #[prost(message, repeated, tag = "2")]
-    pub tenant: ::prost::alloc::vec::Vec<TenantResponseSchema>,
+    pub tenants: ::prost::alloc::vec::Vec<TenantResponseSchema>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListUserResponse {
     #[prost(message, repeated, tag = "2")]
-    pub tenant: ::prost::alloc::vec::Vec<UserResponseSchema>,
+    pub users: ::prost::alloc::vec::Vec<UserResponseSchema>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginRequest {
+    #[prost(string, tag = "1")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub username: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub password: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginResponse {
+    /// The JWT token used for authentication
+    #[prost(string, tag = "1")]
+    pub auth_token: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub refresh_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublicKeyResponse {
+    #[prost(bytes = "vec", repeated, tag = "1")]
+    pub public_key: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
 #[doc = r" Generated client implementations."]
 pub mod tenant_client {
@@ -407,6 +429,35 @@ pub mod tenant_client {
             let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/DeleteUser");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        #[doc = "Authentication API"]
+        pub async fn login(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LoginRequest>,
+        ) -> Result<tonic::Response<super::LoginResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/Login");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn get_public_key(
+            &mut self,
+            request: impl tonic::IntoRequest<()>,
+        ) -> Result<tonic::Response<super::PublicKeyResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/GetPublicKey");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 #[doc = r" Generated server implementations."]
@@ -464,6 +515,15 @@ pub mod tenant_server {
             &self,
             request: tonic::Request<super::OperationRequest>,
         ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
+        #[doc = "Authentication API"]
+        async fn login(
+            &self,
+            request: tonic::Request<super::LoginRequest>,
+        ) -> Result<tonic::Response<super::LoginResponse>, tonic::Status>;
+        async fn get_public_key(
+            &self,
+            request: tonic::Request<()>,
+        ) -> Result<tonic::Response<super::PublicKeyResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct TenantServer<T: Tenant> {
@@ -835,6 +895,65 @@ pub mod tenant_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeleteUserSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/Login" => {
+                    #[allow(non_camel_case_types)]
+                    struct LoginSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::LoginRequest> for LoginSvc<T> {
+                        type Response = super::LoginResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::LoginRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).login(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = LoginSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/GetPublicKey" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPublicKeySvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<()> for GetPublicKeySvc<T> {
+                        type Response = super::PublicKeyResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).get_public_key(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPublicKeySvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,
