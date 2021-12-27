@@ -1,4 +1,3 @@
-use std::time::{Duration, SystemTime};
 use crate::database::schema::user_confirmations;
 use crate::database::schema::users;
 use crate::database::PGPool;
@@ -8,13 +7,10 @@ use failure::Fail;
 use ::pwhash::bcrypt;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use serde_json::{json, Map, Number, Value};
 use uuid::Uuid;
 
 #[derive(Fail, Debug)]
 pub enum UserRepoError {
-    #[fail(display = "An unknown error has occurred.")]
-    Unknown,
     #[fail(display = "Either username or email must be provided")]
     InvalidInput,
     #[fail(display = "Password does not match")]
@@ -158,99 +154,5 @@ impl DBUser {
             return Err(UserRepoError::PasswordDoesNotMatch);
         }
         Ok(true)
-    }
-}
-
-pub struct AuthToken {
-    // The URL for the API issueing the token plus tenant_id
-    issuer: String,
-
-    // UUID of the tennant
-    tennant_id: String,
-
-    // UUID of the user
-    subject: String,
-
-    // Array of permission strings
-    permissions: Vec<String>,
-}
-
-impl AuthToken{
-    pub fn new(db_user: &DBUser, issuer_base: String, permissions: Vec<String>) -> Self {
-        AuthToken{
-            issuer: issuer_base + "/" + db_user.tenant_id.to_string().as_str(),
-            subject: db_user.id.to_string(),
-            tennant_id: db_user.tenant_id.to_string(),
-            permissions,
-        }
-    }
-}
-
-impl Into<Map<String, Value>> for AuthToken {
-    fn into(self) -> Map<String, Value> {
-        let mut map = Map::new();
-        let issue_time = SystemTime::now();
-        if let Some(expiration) = issue_time.checked_add(Duration::from_secs(3600)) {
-            map.insert("exp".to_owned(), time_to_value(&expiration));
-        }
-        if let Some(not_before) = issue_time.checked_sub(Duration::from_secs(120)) {
-            map.insert("nbf".to_owned(), time_to_value(&not_before));
-        }
-        map.insert("iat".to_owned(), time_to_value(&issue_time));
-
-        map.insert("iss".to_owned(), json!(self.issuer));
-        map.insert("sub".to_owned(), json!(self.subject));
-        map.insert("perms".to_owned(), json!(self.permissions));
-        map.insert("tennant".to_owned(), json!(self.tennant_id));
-        map
-    }
-}
-
-pub struct RefreshToken {
-    // The URL for the API issueing the token plus tenant_id
-    issuer: String,
-
-    // UUID of the tennant
-    tennant_id: String,
-
-    // UUID of the user
-    subject: String,
-}
-
-fn time_to_value(value: &SystemTime) -> Value {
-    Value::Number(Number::from(
-        value
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    ))
-}
-
-impl RefreshToken{
-    pub fn new(db_user: &DBUser, issuer_base: String) -> Self {
-        RefreshToken{
-            issuer: issuer_base + "/" + db_user.tenant_id.to_string().as_str(),
-            subject: db_user.id.to_string(),
-            tennant_id: db_user.tenant_id.to_string(),
-        }
-    }
-}
-
-impl Into<Map<String, Value>> for RefreshToken {
-    fn into(self) -> Map<String, Value> {
-        let mut map = Map::new();
-        let issue_time = SystemTime::now();
-        if let Some(expiration) = issue_time.checked_add(Duration::from_secs(259200)) {
-            map.insert("exp".to_owned(), time_to_value(&expiration));
-        }
-        if let Some(not_before) = issue_time.checked_sub(Duration::from_secs(120)) {
-            map.insert("nbf".to_owned(), time_to_value(&not_before));
-        }
-        map.insert("iat".to_owned(), time_to_value(&issue_time));
-
-        map.insert("iss".to_owned(), json!(self.issuer));
-        map.insert("sub".to_owned(), json!(self.subject));
-        map.insert("tennant".to_owned(), json!(self.tennant_id));
-        map
     }
 }

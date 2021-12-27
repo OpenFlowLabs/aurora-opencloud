@@ -161,7 +161,7 @@ message LoginResponse {
 }
 
 message PublicKeyResponse {
-  repeated bytes public_key = 1;
+  repeated string public_key = 1;
 }
 
 

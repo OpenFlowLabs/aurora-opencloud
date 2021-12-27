@@ -208,8 +208,8 @@ pub struct LoginResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PublicKeyResponse {
-    #[prost(bytes = "vec", repeated, tag = "1")]
-    pub public_key: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    #[prost(string, repeated, tag = "1")]
+    pub public_key: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[doc = r" Generated client implementations."]
 pub mod tenant_client {

@@ -18,7 +18,9 @@ use crate::database::tenant::{
     create_tenant, delete_tenant, get_tenant, list_tenants, update_tenant, TenantInput,
     TenantResponse,
 };
-use crate::database::user::{create_user, delete_user, get_user, list_users, update_user, DBUser, NewUser, AuthToken, RefreshToken};
+use crate::database::user::{
+    create_user, delete_user, get_user, list_users, update_user, DBUser, NewUser,
+};
 use crate::rpc::tenant::get_request::Filter;
 use crate::rpc::tenant::operation_request::ObjectSchema;
 use crate::rpc::tenant::operation_response::Object;
@@ -28,7 +30,10 @@ use database::PGPool;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use dotenv::dotenv;
-use josekit::jws::{EdDSA, JwsHeader};
+use pasetors::claims::{Claims};
+use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey, V4};
+use pasetors::public;
+use pasetors::paserk::FormatAsPaserk;
 use pwhash::bcrypt;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
 use rpc::tenant::{
@@ -38,23 +43,14 @@ use rpc::tenant::{
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
-use josekit::jws::alg::eddsa::EddsaJwsSigner;
-use josekit::jwt;
-use josekit::jwt::JwtPayload;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
-
-#[derive(Debug, Fail)]
-enum TenantServiceError {
-    #[fail(display = "invalid input type passed to function")]
-    InvalidInput,
-}
+use openssl::pkey::{PKey};
 
 pub struct TenantSvc {
     pool: PGPool,
-    issuer_base: String,
-    signer: EddsaJwsSigner,
-    public_key: Vec<u8>,
+    public_key: AsymmetricPublicKey<V4>,
+    secret_key: AsymmetricSecretKey<V4>,
 }
 
 fn tenant_response_schema_from_tenant_respose(r: TenantResponse) -> TenantResponseSchema {
@@ -480,41 +476,64 @@ impl Tenant for TenantSvc {
         &self,
         _request: Request<()>,
     ) -> Result<Response<PublicKeyResponse>, Status> {
-        Ok(Response::new(PublicKeyResponse{ public_key: vec![self.public_key.clone()] }))
+        let mut paserk = String::new();
+
+        match self.public_key.fmt(&mut paserk) {
+            Ok(_) => {}
+            Err(err) => return Err(Status::internal(format!("{}", err))),
+        }
+
+        Ok(Response::new(PublicKeyResponse {
+            public_key: vec![paserk],
+        }))
     }
 }
 
 impl TenantSvc {
-    pub fn new(pool: PGPool, issuer_base: String, signer: EddsaJwsSigner, public_key: Vec<u8>) -> Self {
-        TenantSvc { pool, issuer_base, signer, public_key }
+    pub fn new(pool: PGPool, public_key: Vec<u8>, secret_key: Vec<u8>) -> Fallible<Self> {
+        Ok(TenantSvc {
+            pool,
+            public_key: AsymmetricPublicKey::<V4>::from(&public_key)?,
+            secret_key: AsymmetricSecretKey::<V4>::from(&secret_key)?,
+        })
     }
 
-    fn login_db_user(&self, user: DBUser, password: &str, remember: bool) -> Fallible<LoginResponse> {
+    fn login_db_user(
+        &self,
+        user: DBUser,
+        password: &str,
+        remember: bool,
+    ) -> Fallible<LoginResponse> {
         user.verify_pw_result(password)?;
 
-        let perms = vec![];
-        let auth_token = {
-            let mut header = JwsHeader::new();
-            header.set_token_type("JWT");
-            header.set_algorithm("ED25519");
-            let payload = JwtPayload::from_map(AuthToken::new(&user, self.issuer_base.clone(), perms))?;
-            jwt::encode_with_signer(&payload, &header, &self.signer)?
-        };
+        // Setup the default claims, which include `iat` and `nbf` as the current time and `exp` of one hour.
+        // Add a custom `data` claim as well.
+        let mut claims = Claims::new()?;
+        claims.add_additional("data", "A public, signed message")?;
+
+        let auth_token = public::sign(
+            &self.secret_key,
+            &self.public_key,
+            &claims,
+            Some(b"footer"),
+            Some(b"implicit assertion"),
+        )?;
 
         let refresh_token = {
             if remember {
-                let mut header = JwsHeader::new();
-                header.set_token_type("JWT");
-                header.set_algorithm("ED25519");
-                let payload = JwtPayload::from_map(RefreshToken::new(&user, self.issuer_base.clone()))?;
-                Some(jwt::encode_with_signer(&payload, &header, &self.signer)?)
+                Some(public::sign(
+                    &self.secret_key,
+                    &self.public_key,
+                    &claims,
+                    Some(b"footer"),
+                    Some(b"implicit assertion"),
+                )?)
             } else {
                 None
             }
-
         };
 
-        Ok(LoginResponse{
+        Ok(LoginResponse {
             auth_token,
             refresh_token,
         })
@@ -535,6 +554,8 @@ impl TenantSvc {
 // https://docs.diesel.rs/1.4.x/diesel_migrations/macro.embed_migrations.html
 
 // TODO: use clap for the daemon and initialize subcommands
+
+// TODO: Move keys to paserk format and as strings
 
 #[tokio::main]
 async fn main() -> Fallible<()> {
@@ -558,20 +579,20 @@ async fn main() -> Fallible<()> {
         )
     };
 
-    let issuer_base = env::var("ISSUER_BASE").expect("ISSUER_BASE must be set");
+    //let issuer_base = env::var("ISSUER_BASE").expect("ISSUER_BASE must be set");
 
-    let private_key = std::fs::read(priv_key_path.clone())
+    let private_key_bytes = std::fs::read(priv_key_path.clone())
         .expect(format!("could not find private_key for JWT in {}", &priv_key_path).as_str());
-    let public_key = std::fs::read(pub_key_path.clone())
+    let public_key_bytes = std::fs::read(pub_key_path.clone())
         .expect(format!("could not find public_key for JWT in {}", &pub_key_path).as_str());
-    let signer = EdDSA
-        .signer_from_pem(&private_key)
-        .expect(format!("cannot make signer from private_key is it PKCS#8 formatted?").as_str());
+
+    let private_key = PKey::private_key_from_pem(&private_key_bytes)?;
+    let public_key = PKey::public_key_from_pem(&public_key_bytes)?;
 
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Arc::new(Pool::builder().max_size(15).build(manager).unwrap());
 
-    let tenant_service = TenantSvc::new(pool, issuer_base, signer, public_key);
+    let tenant_service = TenantSvc::new(pool, public_key.raw_public_key()?, private_key.raw_private_key()?)?;
     info!("Starting Tenant Service");
     Server::builder()
         .add_service(TenantServer::new(tenant_service))
