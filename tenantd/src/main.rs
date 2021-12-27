@@ -7,10 +7,6 @@ extern crate common;
 extern crate dotenv;
 extern crate uuid;
 
-/*mod rpc {
-    include!(concat!("../protos.out", concat!("/", "tenant", ".rs"))); // The string specified here must match the proto package name
-}*/
-
 mod database;
 mod rpc;
 
