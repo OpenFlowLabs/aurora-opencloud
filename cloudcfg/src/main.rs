@@ -1,12 +1,10 @@
 extern crate common;
 
-mod rpc {
-    tonic::include_proto!("tenant");
-}
+mod rpc;
 
 use common::*;
-use rpc::tenant_client::TenantClient;
-use rpc::PingMsg;
+use rpc::tenant::tenant_client::TenantClient;
+use rpc::tenant::PingMsg;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

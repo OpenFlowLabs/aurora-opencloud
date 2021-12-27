@@ -568,6 +568,7 @@ async fn main() -> Fallible<()> {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
+    info!("Loading Signature keys");
     let (pub_key_path, priv_key_path) = {
         let keys_path = env::var("KEY_DIRECTORY").unwrap_or(String::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -580,7 +581,6 @@ async fn main() -> Fallible<()> {
     };
 
     //let issuer_base = env::var("ISSUER_BASE").expect("ISSUER_BASE must be set");
-
     let private_key_bytes = std::fs::read(priv_key_path.clone())
         .expect(format!("could not find private_key for JWT in {}", &priv_key_path).as_str());
     let public_key_bytes = std::fs::read(pub_key_path.clone())
@@ -589,6 +589,7 @@ async fn main() -> Fallible<()> {
     let private_key = PKey::private_key_from_pem(&private_key_bytes)?;
     let public_key = PKey::public_key_from_pem(&public_key_bytes)?;
 
+    info!("Initiating Database connection");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Arc::new(Pool::builder().max_size(15).build(manager).unwrap());
 
