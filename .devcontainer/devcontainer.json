@@ -5,6 +5,10 @@
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "app",
 	"workspaceFolder": "/workspace",
+	"runServices": [
+        "app",
+        "db"
+    ],
 
 	// Configure tool-specific properties.
 	"customizations": {
@@ -44,5 +48,18 @@
 		"git-lfs": "latest",
 		"github-cli": "latest",
 		"golang": "latest"
-	}
+	},
+	"forwardPorts": [
+        "db:5432"
+    ],
+    "portsAttributes": {
+        "8000": {
+            "label": "Web Application",
+            "onAutoForward": "notify"
+        },
+        "db:5432": {
+            "label": "Database",
+            "onAutoForward": "silent"
+        }
+    },
 }
