@@ -15,8 +15,6 @@ services:
     volumes:
       - .:/workspace
     command: sleep infinity
-    # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
-    network_mode: service:db
   db:
     image: postgres:14.1
     restart: unless-stopped
