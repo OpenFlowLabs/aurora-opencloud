@@ -8,21 +8,21 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../common" }
-tonic = "0.6"
-prost = "0.9"
+tonic = "0.7"
+prost = "0.10"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-diesel = { version = "1.4.6",  default-features=true, features = ["uuidv07", "r2d2", "postgres"] }
+diesel = { version = "1.4",  default-features=true, features = ["uuid", "uuidv07", "r2d2", "postgres", "chrono", "serde_json"] }
+diesel_migrations = "1.4"
 dotenv = "0.15.0"
-uuid = { version = "0.8", features = ["v4"] }
+uuid = { version = "0.7.4", features = ["v4", "serde"] }
 log = "0.4"
 chrono = "0.4.19"
 pwhash = "1.0.0"
-rand = "0.8.3"
-pasetors = "0.4"
-openssl = "0.10.36"
-serde_json = "1.0.64"
-failure = "0.1"
-failure_derive = "0.1"
+rand = "0.8.5"
+pasetors = "0.5.0"
+openssl = "0.10"
+serde_json = "1.0"
+thiserror = "1"
 
 [build-dependencies]
-tonic-build = "0.6"
+tonic-build = "0.7.2"

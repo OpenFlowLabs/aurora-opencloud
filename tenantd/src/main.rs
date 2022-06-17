@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate diesel;
-extern crate failure;
 
 extern crate chrono;
 extern crate common;
@@ -27,8 +26,8 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use dotenv::dotenv;
 use pasetors::claims::{Claims};
-use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey, V4};
-use pasetors::public;
+use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
+use pasetors::{public, version4::V4};
 use pasetors::paserk::FormatAsPaserk;
 use pwhash::bcrypt;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
@@ -42,6 +41,7 @@ use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 use openssl::pkey::{PKey};
+
 
 pub struct TenantSvc {
     pool: PGPool,
@@ -486,7 +486,7 @@ impl Tenant for TenantSvc {
 }
 
 impl TenantSvc {
-    pub fn new(pool: PGPool, public_key: Vec<u8>, secret_key: Vec<u8>) -> Fallible<Self> {
+    pub fn new(pool: PGPool, public_key: Vec<u8>, secret_key: Vec<u8>) -> Result<Self> {
         Ok(TenantSvc {
             pool,
             public_key: AsymmetricPublicKey::<V4>::from(&public_key)?,
@@ -499,7 +499,7 @@ impl TenantSvc {
         user: DBUser,
         password: &str,
         remember: bool,
-    ) -> Fallible<LoginResponse> {
+    ) -> Result<LoginResponse> {
         user.verify_pw_result(password)?;
 
         // Setup the default claims, which include `iat` and `nbf` as the current time and `exp` of one hour.
@@ -511,7 +511,7 @@ impl TenantSvc {
             &self.secret_key,
             &self.public_key,
             &claims,
-            Some(b"footer"),
+            None,
             Some(b"implicit assertion"),
         )?;
 
@@ -521,7 +521,7 @@ impl TenantSvc {
                     &self.secret_key,
                     &self.public_key,
                     &claims,
-                    Some(b"footer"),
+                    None,
                     Some(b"implicit assertion"),
                 )?)
             } else {
@@ -554,7 +554,7 @@ impl TenantSvc {
 // TODO: Move keys to paserk format and as strings
 
 #[tokio::main]
-async fn main() -> Fallible<()> {
+async fn main() -> Result<()> {
     let addr = "127.0.0.1:50051".parse()?;
     let logger = init_log();
     // slog_stdlog uses the logger from slog_scope, so set a logger there

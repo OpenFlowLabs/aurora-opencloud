@@ -5,7 +5,7 @@ use common::*;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Fallible<TenantResponse> {
+pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Result<TenantResponse> {
     let tenant = tenants::table
         .filter(tenants::name.eq(tenant_name))
         .limit(1)
@@ -13,7 +13,7 @@ pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Fallible<TenantResponse> 
     Ok(tenant)
 }
 
-pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Fallible<Vec<TenantResponse>> {
+pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Result<Vec<TenantResponse>> {
     let results: Vec<TenantResponse>;
     if offset != 0 && limit != 0 {
         results = tenants::table
@@ -31,7 +31,7 @@ pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Fallible<Vec<Tena
     Ok(results)
 }
 
-pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Fallible<TenantResponse> {
+pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Result<TenantResponse> {
     let target = tenants::table.find(uuid);
     let resp = diesel::update(target)
         .set(input)
@@ -40,14 +40,14 @@ pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Fallibl
     Ok(resp)
 }
 
-pub fn create_tenant(pool: &PGPool, tenant: &TenantInput) -> Fallible<TenantResponse> {
+pub fn create_tenant(pool: &PGPool, tenant: &TenantInput) -> Result<TenantResponse> {
     let results = diesel::insert_into(tenants::table)
         .values(tenant)
         .get_result(&pool.get()?)?;
     Ok(results)
 }
 
-pub fn delete_tenant(pool: &PGPool, tenant_id: &Uuid) -> Fallible<()> {
+pub fn delete_tenant(pool: &PGPool, tenant_id: &Uuid) -> Result<()> {
     let target = tenants.find(tenant_id);
     diesel::delete(target).execute(&pool.get()?)?;
     Ok(())

@@ -2,7 +2,8 @@ use atty::Stream;
 use slog::Drain;
 use std::sync::Mutex;
 
-pub use failure::{bail, Error, Fail, Fallible, ResultExt};
+pub use anyhow::{bail, Result};
+pub use thiserror::{Error};
 pub use slog::{o, Logger};
 pub use slog_scope::{debug, error, info, set_global_logger, trace, warn};
 

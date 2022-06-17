@@ -3,17 +3,17 @@ use crate::database::schema::users;
 use crate::database::PGPool;
 use common::*;
 use diesel::prelude::*;
-use failure::Fail;
+use thiserror::Error;
 use ::pwhash::bcrypt;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use uuid::Uuid;
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum UserRepoError {
-    #[fail(display = "Either username or email must be provided")]
+    #[error("Either username or email must be provided")]
     InvalidInput,
-    #[fail(display = "Password does not match")]
+    #[error("Password does not match")]
     PasswordDoesNotMatch,
 }
 
@@ -22,7 +22,7 @@ pub fn get_user(
     tenant_id_param: &Uuid,
     email_param: Option<String>,
     username_param: Option<String>,
-) -> Fallible<DBUser> {
+) -> Result<DBUser> {
     if let Some(email_param) = email_param {
         Ok(users::table
             .filter(users::email.eq(email_param).and(users::tenant_id.eq(tenant_id_param)))
@@ -45,7 +45,7 @@ pub fn list_users(
     tenant_id_param: &Uuid,
     limit: u64,
     offset: u64,
-) -> Fallible<Vec<DBUser>> {
+) -> Result<Vec<DBUser>> {
     let results: Vec<DBUser>;
     if offset != 0 && limit != 0 {
         results = users::table
@@ -67,7 +67,7 @@ pub fn list_users(
     Ok(results)
 }
 
-pub fn create_user(pool: &PGPool, new_user: &NewUser) -> Fallible<(DBUser, String)> {
+pub fn create_user(pool: &PGPool, new_user: &NewUser) -> Result<(DBUser, String)> {
     let result: DBUser = diesel::insert_into(users::table)
         .values(new_user)
         .get_result(&pool.get()?)?;
@@ -90,7 +90,7 @@ pub fn create_user(pool: &PGPool, new_user: &NewUser) -> Fallible<(DBUser, Strin
     Ok((result, rand_string))
 }
 
-pub fn update_user(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid, username_param: Option<String>, email_param: Option<String>) -> Fallible<DBUser> {
+pub fn update_user(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid, username_param: Option<String>, email_param: Option<String>) -> Result<DBUser> {
     let target = users::table.filter(users::tenant_id.eq(tenant_id_param)).find(user_id_param);
 
     let result = if email_param.is_some() && username_param.is_none() {
@@ -110,7 +110,7 @@ pub fn update_user(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid, 
     Ok(result?)
 }
 
-pub fn delete_user(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid) -> Fallible<()> {
+pub fn delete_user(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid) -> Result<()> {
     let target = users::table.filter(users::tenant_id.eq(tenant_id_param)).find(user_id_param);
     diesel::delete(target).execute(&pool.get()?)?;
     Ok(())
