@@ -14,7 +14,7 @@ use crate::database::tenant::{
 };
 use crate::database::principal::{
     create_principal, delete_principal, get_principal, list_principals_of_tenant, NewPrincipalInput,
-    add_ssh_key_to_principal, remove_ssh_key_from_principal
+    add_ssh_key_to_principal, remove_ssh_key_from_principal, get_principal_with_key
 };
 use crate::rpc::tenant::*;
 use common::*;
@@ -22,10 +22,13 @@ use database::PGPool;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use dotenv::dotenv;
-use pasetors::claims::{Claims};
+use pasetors::claims::{Claims, ClaimsValidationRules};
 use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
-use pasetors::{public, version4::V4};
+use pasetors::{public, Public, version4::V4};
 use pasetors::paserk::FormatAsPaserk;
+use pasetors::token::{UntrustedToken};
+use pasetors::footer::Footer;
+use core::convert::TryFrom;
 use rpc::tenant::status_response::Status as StatusResponseEnum;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
 use std::env;
@@ -47,6 +50,10 @@ fn err_to_status(err: impl std::fmt::Display) -> Status {
     Status::internal(format!("{}", err))
 }
 
+fn err_to_unauthenticated(err: impl std::fmt::Display) -> Status {
+    Status::unauthenticated(format!("{}", err))
+}
+
 #[tonic::async_trait]
 impl Tenant for TenantSvc {
     async fn ping(&self, request: Request<PingMsg>) -> Result<Response<PongMsg>, Status> {
@@ -63,7 +70,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<ListTenantRequest>,
     ) -> Result<Response<ListTenantResponse>, Status> {
-        let msg: ListTenantRequest = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let reply = match list_tenants(&self.pool, msg.limit, msg.offset) {
             Ok(res) => ListTenantResponse {
@@ -87,7 +94,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<GetTenantRequest>,
     ) -> Result<Response<TenantResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -109,7 +116,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<CreateTenantRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let reply = match create_tenant(&self.pool, &TenantInput{name: msg.name}) {
             Ok(_) => StatusResponse {
@@ -129,7 +136,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<DeleteTenantRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let tenant_id_param = match Uuid::from_str(&msg.id) {
             Ok(i) => i,
@@ -170,7 +177,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<ListPrincipalRequest>,
     ) -> Result<Response<ListPrincipalResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -204,7 +211,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<GetPrincipalRequest>,
     ) -> Result<Response<PrincipalResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -242,7 +249,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<CreatePrincipalRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -303,7 +310,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<AddPublicKeyRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         if msg.public_key.is_none() {
             return Err(Status::invalid_argument("no public key provided"))
@@ -327,7 +334,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<RemovePublicKeyRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -347,7 +354,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<DeletePrincipalRequest>,
     ) -> Result<Response<StatusResponse>, Status>{
-        let msg = request.into_inner();
+        let msg = self.authenticate_and_extract_message(request)?;
 
         let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -373,14 +380,50 @@ impl TenantSvc {
         })
     }
 
+    fn authenticate_and_extract_message<T>(&self, req: Request<T>) -> Result<T, Status> {
+        let client_token = req.metadata().get("authorization")
+            .ok_or_else(|| Status::unauthenticated("No auth token provided"))?;
+        
+        let validation_rules = ClaimsValidationRules::new();
+        let untrusted_token = UntrustedToken::<Public, V4>::try_from(client_token.to_str()
+            .map_err(err_to_unauthenticated)?).map_err(err_to_unauthenticated)?;
+
+        let mut footer = Footer::new();
+        footer.parse_bytes(untrusted_token.untrusted_footer()).map_err(err_to_unauthenticated)?;
+        
+        //TODO: Authorization
+        let _claims = if footer.contains_claim("fingerprint") {
+            let fingerprint_value = footer.get_claim("fingerprint")
+                .ok_or_else( || Status::unauthenticated("No claims in the token"))?;
+
+            let fingerprint = fingerprint_value.as_str()
+                .ok_or_else( || Status::unauthenticated("No claims in the token"))?;
+
+
+            let principal = get_principal_with_key(&self.pool, fingerprint).map_err(err_to_unauthenticated)?;
+
+            let public_key = AsymmetricPublicKey::<V4>::try_from(principal.public_key_paserk.as_str())
+                .map_err(err_to_unauthenticated)?;
+
+            let trusted_token = public::verify(&public_key, &untrusted_token, &validation_rules, None, None)
+                .map_err(err_to_unauthenticated)?;
+            
+            trusted_token.payload_claims().ok_or_else( || Status::unauthenticated("No claims in the token"))?.clone()
+        } else {
+            let trusted_token = public::verify(&self.public_key, &untrusted_token, &validation_rules, None, None)
+                .map_err(err_to_unauthenticated)?;
+            
+            trusted_token.payload_claims().ok_or_else( || Status::unauthenticated("No claims in the token"))?.clone()
+        };
+
+        Ok(req.into_inner())
+    }
 }
 
 // TODO: Embed migrations
 // https://docs.diesel.rs/1.4.x/diesel_migrations/macro.embed_migrations.html
 
 // TODO: use clap for the daemon and initialize subcommands
-
-// TODO: Move keys to paserk format and as strings
 
 #[tokio::main]
 async fn main() -> Result<()> {

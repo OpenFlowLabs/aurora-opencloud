@@ -5,7 +5,7 @@ use common::*;
 use diesel::prelude::*;
 use thiserror::Error;
 use uuid::Uuid;
-use anyhow::{bail};
+use anyhow::{bail, anyhow};
 use pasetors::paserk::FormatAsPaserk;
 use pasetors::keys::AsymmetricPublicKey;
 use pasetors::version4::V4;
@@ -37,6 +37,23 @@ pub fn get_principal(
     } else {
         bail!(PrincipalRepoError::InvalidInput)
     }
+}
+
+pub fn get_principal_with_key(
+    pool: &PGPool,
+    fingerprint: &str,
+) -> Result<PrincipalWithKey> {
+    public_keys::table
+        .inner_join(principals_pks::table.inner_join(principals::table))
+        .filter(public_keys::fingerprint.eq(fingerprint))
+        .select((principals::columns::id, 
+            principals::columns::tenant_id, 
+            principals::columns::p_name, 
+            principals::columns::email, 
+            principals::columns::email_confirmed, 
+            public_keys::columns::fingerprint, 
+            public_keys::columns::public_key_paserk))
+        .first::<PrincipalWithKey>(&pool.get()?).map_err(|err| anyhow!("{}", err))
 }
 
 pub fn list_principals_of_tenant(
@@ -223,4 +240,15 @@ pub struct Principal {
     pub p_name: String,
     pub email: Option<String>,
     pub email_confirmed: Option<bool>,
+}
+
+#[derive(Queryable, Default, Clone)]
+pub struct PrincipalWithKey {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub p_name: String,
+    pub email: Option<String>,
+    pub email_confirmed: Option<bool>,
+    pub public_key_paserk: String,
+    pub fingerprint: String,
 }
