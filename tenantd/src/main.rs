@@ -24,7 +24,7 @@ use database::PGPool;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use dotenv::dotenv;
-use openssl::pkey::PKey;
+use openssl::pkey::{PKey, Private};
 use pasetors::claims::{Claims, ClaimsValidationRules};
 use pasetors::footer::Footer;
 use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
@@ -35,7 +35,9 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use rpc::tenant::status_response::Status as StatusResponseEnum;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
-use std::env;
+use std::{env, fs};
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
@@ -53,6 +55,42 @@ fn err_to_status(err: impl std::fmt::Display) -> Status {
 
 fn err_to_unauthenticated(err: impl std::fmt::Display) -> Status {
     Status::unauthenticated(format!("{}", err))
+}
+
+fn make_mail_token(
+    email: Option<String>,
+    principal_name: &str,
+    tenant_id: &Uuid,
+    private_key: &AsymmetricSecretKey<V4>,
+    public_key: &AsymmetricPublicKey<V4>,
+) -> Result<Option<String>> {
+    let mail_token = if let Some(ref email) = email {
+        let rand_string: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(30)
+            .map(char::from)
+            .collect();
+
+        let mut claims = Claims::new().map_err(err_to_status)?;
+        claims.subject(principal_name).map_err(err_to_status)?;
+        claims
+            .add_additional("tenant", tenant_id.to_hyphenated().to_string())
+            .map_err(err_to_status)?;
+        claims
+            .add_additional("email", email.clone())
+            .map_err(err_to_status)?;
+        claims
+            .token_identifier(&rand_string)
+            .map_err(err_to_status)?;
+
+        let mail_token =
+            public::sign(private_key, public_key, &claims, None, None).map_err(err_to_status)?;
+        Some(mail_token)
+    } else {
+        None
+    };
+
+    Ok(mail_token)
 }
 
 #[tonic::async_trait]
@@ -264,31 +302,14 @@ impl Tenant for TenantSvc {
             tenant_id,
         };
 
-        let mail_token = if let Some(ref email) = input.email {
-            let rand_string: String = thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(30)
-                .map(char::from)
-                .collect();
-
-            let mut claims = Claims::new().map_err(err_to_status)?;
-            claims.subject(&input.p_name).map_err(err_to_status)?;
-            claims
-                .add_additional("tenant", input.tenant_id.to_hyphenated().to_string())
-                .map_err(err_to_status)?;
-            claims
-                .add_additional("email", email.clone())
-                .map_err(err_to_status)?;
-            claims
-                .token_identifier(&rand_string)
-                .map_err(err_to_status)?;
-
-            let mail_token = public::sign(&self.secret_key, &self.public_key, &claims, None, None)
-                .map_err(err_to_status)?;
-            Some(mail_token)
-        } else {
-            None
-        };
+        let mail_token = make_mail_token(
+            input.email.clone(),
+            &input.p_name,
+            &tenant_id,
+            &self.secret_key,
+            &self.public_key,
+        )
+        .map_err(err_to_status)?;
 
         let reply = match create_principal(&self.pool, &input, mail_token, msg.public_keys) {
             Ok(r) => {
@@ -319,10 +340,6 @@ impl Tenant for TenantSvc {
     ) -> Result<Response<StatusResponse>, Status> {
         let msg = self.authenticate_and_extract_message(request)?;
 
-        if msg.public_key.is_none() {
-            return Err(Status::invalid_argument("no public key provided"));
-        }
-
         let tenant_id = match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
             Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
@@ -331,7 +348,7 @@ impl Tenant for TenantSvc {
         let principal = get_principal(&self.pool, &tenant_id, Some(msg.principal_name), None)
             .map_err(err_to_status)?;
 
-        add_ssh_key_to_principal(&self.pool, &principal.id, msg.public_key.unwrap())
+        add_ssh_key_to_principal(&self.pool, &principal.id, &msg.public_key)
             .map_err(err_to_status)?;
 
         Ok(Response::new(StatusResponse {
@@ -462,40 +479,88 @@ impl TenantSvc {
 
 // TODO: use clap for the daemon and initialize subcommands
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let addr = "127.0.0.1:50051".parse()?;
-    let logger = init_log();
-    // slog_stdlog uses the logger from slog_scope, so set a logger there
-    let _guard = set_global_logger(logger);
+use clap::{Parser, Subcommand};
 
-    dotenv().ok();
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+#[clap(propagate_version = true)]
+struct Cli {
+    #[clap(subcommand)]
+    command: CliCommands,
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    #[clap(long, short, env, value_parser)]
+    database_url: Option<String>,
 
+    #[clap(long, short, env, value_parser)]
+    key_directory: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+enum CliCommands {
+    Serve {
+        #[clap(long, short, default_value_t = String::from("127.0.0.1"), value_parser)]
+        listen: String,
+
+        #[clap(long, short, default_value_t = String::from("50051"), value_parser)]
+        port: String,
+    },
+    CreateTenant {
+        #[clap(value_parser)]
+        name: String,
+    },
+    CreatePrincipal {
+        #[clap(value_parser)]
+        tenant: String,
+
+        #[clap(value_parser)]
+        principal_name: String,
+
+        #[clap(value_parser)]
+        public_key: String,
+
+        #[clap(value_parser)]
+        email: Option<String>,
+    },
+}
+
+fn load_keys_from_disk<P: AsRef<Path>>(
+    key_directory: P,
+) -> Result<(PKey<Private>, PKey<openssl::pkey::Public>)> {
     info!("Loading Signature keys");
     let (pub_key_path, priv_key_path) = {
-        let keys_path = env::var("KEY_DIRECTORY").unwrap_or_else(|_| {
-            String::from(concat!(env!("CARGO_MANIFEST_DIR"), "/sample_data/keys"))
-        });
         (
-            keys_path.clone() + "/ED25519_public.pem",
-            keys_path + "/ED25519_private.pem",
+            key_directory.as_ref().join("ED25519_public.pem"),
+            key_directory.as_ref().join("ED25519_private.pem"),
         )
     };
 
-    //let issuer_base = env::var("ISSUER_BASE").expect("ISSUER_BASE must be set");
-    let private_key_bytes = std::fs::read(priv_key_path.clone())
-        .unwrap_or_else(|_| panic!("could not find private_key for JWT in {}", &priv_key_path));
-    let public_key_bytes = std::fs::read(pub_key_path.clone())
-        .unwrap_or_else(|_| panic!("could not find public_key for JWT in {}", &pub_key_path));
+    let private_key_bytes = std::fs::read(priv_key_path)?;
+    let public_key_bytes = std::fs::read(pub_key_path)?;
 
     let private_key = PKey::private_key_from_pem(&private_key_bytes)?;
     let public_key = PKey::public_key_from_pem(&public_key_bytes)?;
 
+    Ok((private_key, public_key))
+}
+
+fn build_database_connection(database_url: &str) -> Result<PGPool> {
     info!("Initiating Database connection");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
-    let pool = Arc::new(Pool::builder().max_size(15).build(manager).unwrap());
+    let pool = Arc::new(Pool::builder().max_size(15).build(manager)?);
+    Ok(pool)
+}
+
+async fn serve<P: AsRef<Path>>(
+    listen: &str,
+    port: &str,
+    database_url: &str,
+    key_directory: P,
+) -> Result<()> {
+    let addr: SocketAddr = format!("{}:{}", listen, port).parse()?;
+
+    let (private_key, public_key) = load_keys_from_disk(key_directory)?;
+
+    let pool = build_database_connection(database_url)?;
 
     let tenant_service = TenantSvc::new(
         pool,
@@ -509,4 +574,84 @@ async fn main() -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let logger = init_log();
+    // slog_stdlog uses the logger from slog_scope, so set a logger there
+    let _guard = set_global_logger(logger);
+
+    dotenv().ok();
+
+    let key_directory = if let Some(key_directory) = cli.key_directory {
+        PathBuf::from(key_directory)
+    } else {
+        let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
+        let manifest_path = Path::new(&manifest_dir);
+        manifest_path.join("sample_data").join("keys")
+    };
+
+    let database_url = if let Some(database_url) = cli.database_url {
+        database_url
+    } else {
+        env::var("DATABASE_URL")?
+    };
+
+    match cli.command {
+        CliCommands::Serve { listen, port } => {
+            serve(&listen, &port, &database_url, &key_directory).await
+        }
+        CliCommands::CreateTenant { name } => {
+            let pool = build_database_connection(&database_url)?;
+            let tenant = create_tenant(&pool, &TenantInput { name })?;
+            info!(
+                "Created Tenant {} with id {}",
+                tenant.name,
+                tenant.id.to_hyphenated()
+            );
+            Ok(())
+        }
+        CliCommands::CreatePrincipal {
+            tenant,
+            principal_name,
+            email,
+            public_key,
+        } => {
+            let pool = build_database_connection(&database_url)?;
+            let (private_key, server_public_key) = load_keys_from_disk(key_directory)?;
+            let (private_key, server_public_key) = (
+                AsymmetricSecretKey::<V4>::from(&private_key.raw_private_key()?)?,
+                AsymmetricPublicKey::<V4>::from(&server_public_key.raw_public_key()?)?,
+            );
+            let tenant = get_tenant(&pool, &tenant)?;
+
+            let input = NewPrincipalInput {
+                p_name: principal_name.clone(),
+                email: email.clone(),
+                tenant_id: tenant.id,
+            };
+
+            let mail_token = make_mail_token(
+                email,
+                &principal_name,
+                &tenant.id,
+                &private_key,
+                &server_public_key,
+            )?;
+
+            let public_key = if Path::exists(Path::new(&public_key)) {
+                fs::read_to_string(Path::new(&public_key))?
+            } else {
+                public_key
+            };
+
+            let principal = create_principal(&pool, &input, mail_token, vec![public_key])?;
+
+            info!("Created Principal {}@{}", principal.p_name, tenant.name);
+            Ok(())
+        }
+    }
 }

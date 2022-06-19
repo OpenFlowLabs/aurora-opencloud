@@ -1,9 +1,9 @@
 use crate::database::schema::{principals, principals_pks, public_keys, user_confirmations};
 use crate::database::PGPool;
-use crate::rpc::tenant::PublicKey;
 use anyhow::{anyhow, bail};
 use common::*;
 use diesel::prelude::*;
+use osshkeys::{keys::FingerprintHash, PublicKey as SSHPublicKey, PublicParts};
 use pasetors::keys::AsymmetricPublicKey;
 use pasetors::paserk::FormatAsPaserk;
 use pasetors::version4::V4;
@@ -91,7 +91,7 @@ pub fn create_principal(
     pool: &PGPool,
     input: &NewPrincipalInput,
     mail_token: Option<String>,
-    pub_keys: Vec<PublicKey>,
+    pub_keys: Vec<String>,
 ) -> Result<Principal> {
     if pub_keys.is_empty() {
         bail!("no public key provided")
@@ -127,25 +127,11 @@ pub fn create_principal(
         }
 
         for key in pub_keys {
-            let ossh_key = openssh_keys::PublicKey::parse(&key.key_openssh)?;
-            let pem_key = openssl::pkey::PKey::public_key_from_pem(key.key_pem.as_bytes())?;
-            let parsed_key = AsymmetricPublicKey::<V4>::from(&pem_key.raw_public_key()?)?;
-            let mut paserk = String::new();
-            parsed_key.fmt(&mut paserk)?;
-
-            let fingerprint = if let Some(fingerprint) = key.fingerprint {
-                fingerprint
-            } else {
-                ossh_key.fingerprint()
-            };
+            let public_key = public_key_from_keystring(&key)?;
+            let fingerprint = public_key.fingerprint.clone();
 
             diesel::insert_into(public_keys::table)
-                .values(NewKeyInput {
-                    fingerprint: &fingerprint,
-                    public_key: &key.key_openssh,
-                    public_key_pem: &key.key_pem,
-                    public_key_paserk: &paserk,
-                })
+                .values(public_key)
                 .execute(conn)?;
 
             diesel::insert_into(principals_pks::table)
@@ -160,29 +146,15 @@ pub fn create_principal(
     })
 }
 
-pub fn add_ssh_key_to_principal(pool: &PGPool, principal_id: &Uuid, key: PublicKey) -> Result<()> {
+pub fn add_ssh_key_to_principal(pool: &PGPool, principal_id: &Uuid, key: &str) -> Result<()> {
     let conn = &pool.get()?;
 
     conn.build_transaction().read_write().run(move || {
-        let ossh_key = openssh_keys::PublicKey::parse(&key.key_openssh)?;
-        let pem_key = openssl::pkey::PKey::public_key_from_pem(key.key_pem.as_bytes())?;
-        let parsed_key = AsymmetricPublicKey::<V4>::from(&pem_key.raw_public_key()?)?;
-        let mut paserk = String::new();
-        parsed_key.fmt(&mut paserk)?;
-
-        let fingerprint = if let Some(fingerprint) = key.fingerprint {
-            fingerprint
-        } else {
-            ossh_key.fingerprint()
-        };
+        let public_key = public_key_from_keystring(key)?;
+        let fingerprint = public_key.fingerprint.clone();
 
         diesel::insert_into(public_keys::table)
-            .values(NewKeyInput {
-                fingerprint: &fingerprint,
-                public_key: &key.key_openssh,
-                public_key_pem: &key.key_pem,
-                public_key_paserk: &paserk,
-            })
+            .values(public_key)
             .execute(conn)?;
 
         diesel::insert_into(principals_pks::table)
@@ -224,6 +196,26 @@ pub fn delete_principal(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &U
     Ok(())
 }
 
+pub(crate) fn public_key_from_keystring(key_string: &str) -> Result<PublicKey> {
+    let ossh_key = SSHPublicKey::from_keystr(key_string)?;
+
+    let pem_key_string = ossh_key.serialize_pem()?;
+
+    let ossl_pem_key = openssl::pkey::PKey::public_key_from_pem(pem_key_string.as_bytes())?;
+    let parsed_key = AsymmetricPublicKey::<V4>::from(&ossl_pem_key.raw_public_key()?)?;
+    let mut paserk = String::new();
+    parsed_key.fmt(&mut paserk)?;
+
+    let fingerprint = hex::encode(ossh_key.fingerprint(FingerprintHash::SHA256)?);
+
+    Ok(PublicKey {
+        fingerprint,
+        public_key: ossh_key.serialize()?,
+        public_key_pem: pem_key_string,
+        public_key_paserk: paserk,
+    })
+}
+
 #[derive(Insertable)]
 #[table_name = "principals_pks"]
 struct NewKeyPrincipalLinkInput<'a> {
@@ -233,11 +225,11 @@ struct NewKeyPrincipalLinkInput<'a> {
 
 #[derive(Insertable)]
 #[table_name = "public_keys"]
-struct NewKeyInput<'a> {
-    fingerprint: &'a str,
-    public_key: &'a str,
-    public_key_pem: &'a str,
-    public_key_paserk: &'a str,
+pub(crate) struct PublicKey {
+    fingerprint: String,
+    public_key: String,
+    public_key_pem: String,
+    public_key_paserk: String,
 }
 
 #[derive(Insertable)]
