@@ -1,7 +1,6 @@
-pub mod permission;
 pub mod schema;
 pub mod tenant;
-pub mod user;
+pub mod principal;
 
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;

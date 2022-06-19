@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let response = client.ping(request).await?;
 
-    info!("Pong Status: {}", response.into_inner().status);
+    info!("Pong Status: {}", response.into_inner().pong);
 
     Ok(())
 }

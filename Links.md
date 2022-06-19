@@ -1,5 +1,9 @@
 # Authorization
 - https://github.com/casbin/casbin-rs
+- https://www.osohq.com/
+
+# Pubsub
+- https://estokes.github.io/netidx-book/quick_start.html
 
 # Kubernetes on illumos
 - https://medium.com/@norlin.t/kubernetes-the-hard-illumos-way-c4b45a080bac

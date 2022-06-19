@@ -3,136 +3,118 @@ package tenant;
 import "google/protobuf/empty.proto";
 
 service Tenant {
-        // A small rpc to ping to make sure we are connected, but also
-        // to help make a fast development function
-        rpc Ping(PingMsg) returns (PongMsg);
+  // A small rpc to ping to make sure we are connected, but also
+  // to help make a fast development function
+  rpc Ping(PingMsg) returns (PongMsg);
 
-        // Tenant CRUD
-        rpc ListTenants(ListRequest) returns (ListTenantResponse);
-        rpc GetTenant(GetRequest) returns (TenantResponseSchema);
-        rpc CreateTenant(OperationRequest) returns (OperationResponse);
-        rpc UpdateTenant(OperationRequest) returns (OperationResponse);
-        rpc DeleteTenant(OperationRequest) returns (OperationResponse);
+  // Tenant Public API
+  rpc ListTenants(ListTenantRequest) returns (ListTenantResponse);
+  rpc GetTenant(GetTenantRequest) returns (TenantResponse);
+  rpc CreateTenant(CreateTenantRequest) returns (StatusResponse);
+  rpc DeleteTenant(DeleteTenantRequest) returns (StatusResponse);
 
-        // User CRUD
-        rpc ListUsers(ListRequest) returns (ListUserResponse);
-        rpc GetUser(GetRequest) returns (UserResponseSchema);
-        rpc CreateUser(OperationRequest) returns (OperationResponse);
-        rpc UpdateUser(OperationRequest) returns (OperationResponse);
-        rpc DeleteUser(OperationRequest) returns (OperationResponse);
-
-        //Authentication API
-        rpc Login(LoginRequest) returns (LoginResponse);
-        rpc GetPublicKey(google.protobuf.Empty) returns (PublicKeyResponse);
+  // Principal Public API
+  rpc ListPrincipals(ListPrincipalRequest) returns (ListPrincipalResponse);
+  rpc GetPrincipal(GetPrincipalRequest) returns (PrincipalResponse);
+  rpc CreatePrincipal(CreatePrincipalRequest) returns (StatusResponse);
+  rpc AddPublicKeyToPrincipal(AddPublicKeyRequest) returns (StatusResponse);
+  rpc RemovePublicKey(RemovePublicKeyRequest) returns (StatusResponse);
+  rpc DeletePrincipal(DeletePrincipalRequest) returns (StatusResponse);
+  rpc GetServerPublicKey(google.protobuf.Empty) returns (PublicKeyResponse);
 }
 
-message PingMsg {
-        // Who has pinged the server
-        string sender = 1;
+message DeletePrincipalRequest {
+  string principal_name = 1;
+  string tenant_id = 2;
 }
 
-message PongMsg {
-        // Smallest possible success message. I don't think we need to set it
-        // to anything else than Success but Nice to have a way to tell a bit of a
-        // status
-        enum Status {
-             SUCCESS = 0;
-             ERROR = 1;
-             MAINTENANCE = 2;
-        }
-        Status status = 1;
+message RemovePublicKeyRequest {
+  string principal_name = 1;
+  string tenant_id = 2;
+  string fingerprint = 3;
 }
 
-message OperationRequest {
-  // id on which to perform the operation
-  // will be ignored for create but is mandatory on change operations
-  // set if your API endpoint needs it.
-  string uuid = 1;
-  // the serialized modification data to apply.
-  oneof object_schema {
-    TenantOperationRequestSchema tenant = 2;
-    UserOperationRequestSchema user = 3;
-  }
+message AddPublicKeyRequest {
+  string principal_name = 1;
+  string tenant_id = 2;
+  PublicKey public_key = 3;
 }
 
-message TenantOperationRequestSchema {
+message CreatePrincipalRequest {
+  string name = 1;
+  string tenant_id = 2;
+  optional string email = 3;
+  repeated PublicKey public_keys = 4;
+}
+
+message PublicKey {
+  optional string fingerprint = 1;
+  string key_pem = 2;
+  string key_openssh = 3;
+}
+
+message DeleteTenantRequest {
+  string id = 1;
+}
+
+message CreateTenantRequest {
   string name = 1;
 }
 
-message UserOperationRequestSchema {
-  // tenant id
-  string tenant_id = 1;
-  // username
-  string username = 2;
-  // password of the new user
-  string password = 3;
-  // email for the user
-  string email = 4;
-}
-
-message OperationResponse {
-  // enum describing the kind of return
+message StatusResponse {
   enum Status {
-    SUCCESS = 0;
+    OK = 0;
     ERROR = 1;
-    MAINTENANCE = 2;
   }
-  Status status = 1;
-  // an additional status message about the operation performed only set if there was an error
-  // optional
-  string response_message = 2;
-  // serialized bytes of the Result of the operation
-  // This allows to reduce API calls as the client can parse this field optionally if needed
-  // If one wants client control over this use the boolean return result object
-  oneof object {
-      UserResponseSchema user = 3;
-      TenantResponseSchema tenant =4;
-  }
+  Status code = 1;
+  optional string message = 2;
 }
 
-message UserResponseSchema {
-  // tenant id
-  string tenant_id = 1;
-  string uuid = 2;
-  string username = 3;
-  string email = 4;
-  bool email_confirmed = 5;
+message PingMsg {
+  // Who has pinged the server
+  string sender = 1;
 }
 
-message TenantResponseSchema {
-  // tenant id
-  string uuid = 1;
-  string name = 2;
+message PongMsg {
+  string pong = 1;
 }
 
 
-message ListRequest {
+message ListTenantRequest {
   // limit of amount of records to return
   uint64 limit = 1;
   // offeset after which entry to return results
   uint64 offset = 2;
   // filter to filter entities by
-  oneof filter {
-    UserFilter user = 3;
-    TenantFilter tenant = 4;
-  }
+  TenantFilter filter = 3;
 }
 
-message GetRequest {
+message ListPrincipalRequest {
+  // limit of amount of records to return
+  uint64 limit = 1;
+  // offeset after which entry to return results
+  uint64 offset = 2;
   // filter to filter entities by
-  oneof filter {
-    UserFilter user = 3;
-    TenantFilter tenant = 4;
-  }
+  PrincipalFilter filter = 3;
 }
 
-message UserFilter {
+message GetTenantRequest {
+  // filter to filter entities by
+  TenantFilter filter = 1;
+}
+
+message GetPrincipalRequest {
+  // filter to filter entities by
+  PrincipalFilter filter = 1;
+}
+
+message PrincipalFilter {
   // tenant (this is mandatory)
   string tenant_id = 1;
-  // email, either this or username needs to be set
-  string email = 2;
-  // username, either this or email needs to be set
-  string username = 3;
+  oneof mail_or_name {
+    string email = 2;
+    string name = 3;
+  }
 }
 
 message TenantFilter {
@@ -141,23 +123,23 @@ message TenantFilter {
 }
 
 message ListTenantResponse {
-  repeated TenantResponseSchema tenants = 2;
+  repeated TenantResponse tenants = 1;
 }
 
-message ListUserResponse {
-  repeated UserResponseSchema users = 2;
+message ListPrincipalResponse {
+  repeated PrincipalResponse principals = 1;
 }
 
-message LoginRequest {
-  string tenant_id = 1;
-  string username = 2;
-  string password = 3;
+message PrincipalResponse {
+  string id = 1;
+  string name = 2;
+  optional string email = 3;
+  optional bool email_confirmed = 4;
 }
 
-message LoginResponse {
-  // The JWT token used for authentication
-  string auth_token = 1;
-  optional string refresh_token = 2;
+message TenantResponse {
+  string id = 1;
+  string name = 2;
 }
 
 message PublicKeyResponse {

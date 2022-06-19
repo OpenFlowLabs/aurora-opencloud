@@ -5,42 +5,33 @@ use common::*;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Result<TenantResponse> {
+pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Result<Tenant> {
     let tenant = tenants::table
         .filter(tenants::name.eq(tenant_name))
         .limit(1)
-        .first::<TenantResponse>(&pool.get()?)?;
+        .first::<Tenant>(&pool.get()?)?;
     Ok(tenant)
 }
 
-pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Result<Vec<TenantResponse>> {
-    let results: Vec<TenantResponse>;
+pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Result<Vec<Tenant>> {
+    let results: Vec<Tenant>;
     if offset != 0 && limit != 0 {
         results = tenants::table
             .limit(limit as i64)
             .offset(offset as i64)
-            .load::<TenantResponse>(&pool.get()?)?;
+            .load::<Tenant>(&pool.get()?)?;
     } else if limit != 0 {
         results = tenants::table
             .limit(limit as i64)
-            .load::<TenantResponse>(&pool.get()?)?;
+            .load::<Tenant>(&pool.get()?)?;
     } else {
-        results = tenants::table.load::<TenantResponse>(&pool.get()?)?;
+        results = tenants::table.load::<Tenant>(&pool.get()?)?;
     }
 
     Ok(results)
 }
 
-pub fn update_tenant(pool: &PGPool, uuid: &Uuid, input: &TenantInput) -> Result<TenantResponse> {
-    let target = tenants::table.find(uuid);
-    let resp = diesel::update(target)
-        .set(input)
-        .get_result::<TenantResponse>(&pool.get()?)?;
-
-    Ok(resp)
-}
-
-pub fn create_tenant(pool: &PGPool, tenant: &TenantInput) -> Result<TenantResponse> {
+pub fn create_tenant(pool: &PGPool, tenant: &TenantInput) -> Result<Tenant> {
     let results = diesel::insert_into(tenants::table)
         .values(tenant)
         .get_result(&pool.get()?)?;
@@ -60,7 +51,7 @@ pub struct TenantInput {
 }
 
 #[derive(Queryable, Debug)]
-pub struct TenantResponse {
+pub struct Tenant {
     pub id: Uuid,
     pub name: String,
 }

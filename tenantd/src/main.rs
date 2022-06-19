@@ -10,16 +10,13 @@ mod database;
 mod rpc;
 
 use crate::database::tenant::{
-    create_tenant, delete_tenant, get_tenant, list_tenants, update_tenant, TenantInput,
-    TenantResponse,
+    create_tenant, delete_tenant, get_tenant, list_tenants, TenantInput
 };
-use crate::database::user::{
-    create_user, delete_user, get_user, list_users, update_user, DBUser, NewUser,
+use crate::database::principal::{
+    create_principal, delete_principal, get_principal, list_principals_of_tenant, NewPrincipalInput,
+    add_ssh_key_to_principal, remove_ssh_key_from_principal
 };
-use crate::rpc::tenant::get_request::Filter;
-use crate::rpc::tenant::operation_request::ObjectSchema;
-use crate::rpc::tenant::operation_response::Object;
-use crate::rpc::tenant::{list_request, LoginRequest, LoginResponse, PublicKeyResponse};
+use crate::rpc::tenant::*;
 use common::*;
 use database::PGPool;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -29,19 +26,16 @@ use pasetors::claims::{Claims};
 use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
 use pasetors::{public, version4::V4};
 use pasetors::paserk::FormatAsPaserk;
-use pwhash::bcrypt;
+use rpc::tenant::status_response::Status as StatusResponseEnum;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
-use rpc::tenant::{
-    GetRequest, ListRequest, ListTenantResponse, ListUserResponse, OperationRequest,
-    OperationResponse, PingMsg, PongMsg, TenantResponseSchema, UserResponseSchema,
-};
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 use openssl::pkey::{PKey};
-
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 pub struct TenantSvc {
     pool: PGPool,
@@ -49,46 +43,34 @@ pub struct TenantSvc {
     secret_key: AsymmetricSecretKey<V4>,
 }
 
-fn tenant_response_schema_from_tenant_respose(r: TenantResponse) -> TenantResponseSchema {
-    TenantResponseSchema {
-        uuid: r.id.to_string(),
-        name: r.name,
-    }
-}
-
-fn empty_to_optional_string(input: &str) -> Option<String> {
-    if input == "" {
-        None
-    } else {
-        Some(input.to_string())
-    }
+fn err_to_status(err: impl std::fmt::Display) -> Status {
+    Status::internal(format!("{}", err))
 }
 
 #[tonic::async_trait]
 impl Tenant for TenantSvc {
     async fn ping(&self, request: Request<PingMsg>) -> Result<Response<PongMsg>, Status> {
         // Log the ping we have gotten so we see some traffic
-        info!("received ping from: {}", request.into_inner().sender);
+        let message = format!("received ping from: {}", request.into_inner().sender);
+        info!("{}", &message);
 
-        let reply = PongMsg {
-            status: rpc::tenant::pong_msg::Status::Success.into(),
-        };
+        let reply = PongMsg { pong: message };
 
         Ok(Response::new(reply))
     }
 
     async fn list_tenants(
         &self,
-        request: Request<ListRequest>,
+        request: Request<ListTenantRequest>,
     ) -> Result<Response<ListTenantResponse>, Status> {
-        let msg: ListRequest = request.into_inner();
+        let msg: ListTenantRequest = request.into_inner();
 
         let reply = match list_tenants(&self.pool, msg.limit, msg.offset) {
             Ok(res) => ListTenantResponse {
                 tenants: res
                     .iter()
-                    .map(|t| TenantResponseSchema {
-                        uuid: t.id.to_string(),
+                    .map(|t| TenantResponse {
+                        id: t.id.to_hyphenated().to_string(),
                         name: t.name.clone(),
                     })
                     .collect(),
@@ -103,26 +85,18 @@ impl Tenant for TenantSvc {
 
     async fn get_tenant(
         &self,
-        request: Request<GetRequest>,
-    ) -> Result<Response<TenantResponseSchema>, Status> {
+        request: Request<GetTenantRequest>,
+    ) -> Result<Response<TenantResponse>, Status> {
         let msg = request.into_inner();
 
-        let maybe_filter = match msg.filter {
-            None => None,
-            Some(f) => match f {
-                Filter::User(_) => None,
-                Filter::Tenant(ft) => Some(ft),
-            },
-        };
-
-        let filter = match maybe_filter {
+        let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
             Some(i) => i,
         };
 
         let reply = match get_tenant(&self.pool, &filter.name) {
-            Ok(r) => TenantResponseSchema {
-                uuid: r.id.to_string(),
+            Ok(r) => TenantResponse {
+                id: r.id.to_hyphenated().to_string(),
                 name: r.name,
             },
             Err(err) => return Err(Status::unknown(format!("{}", err))),
@@ -133,74 +107,19 @@ impl Tenant for TenantSvc {
 
     async fn create_tenant(
         &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
+        request: Request<CreateTenantRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
         let msg = request.into_inner();
 
-        let maybe_tenant_input = match msg.object_schema {
-            None => None,
-            Some(i) => match i {
-                ObjectSchema::Tenant(ti) => Some(TenantInput {
-                    name: ti.name.clone(),
-                }),
-                ObjectSchema::User(_) => None,
+        let reply = match create_tenant(&self.pool, &TenantInput{name: msg.name}) {
+            Ok(_) => StatusResponse {
+                code: StatusResponseEnum::Ok.into(),
+                message: None,
             },
-        };
-
-        let tenant_input = match maybe_tenant_input {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let reply = match create_tenant(&self.pool, &tenant_input) {
-            Ok(r) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: Some(Object::Tenant(tenant_response_schema_from_tenant_respose(
-                    r,
-                ))),
+            Err(err) => StatusResponse {
+                code: StatusResponseEnum::Error.into(),
+                message: Some(format!("{}", err)),
             },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        Ok(Response::new(reply))
-    }
-
-    async fn update_tenant(
-        &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
-        let msg = request.into_inner();
-
-        let maybe_tenant_input = match msg.object_schema {
-            None => None,
-            Some(i) => match i {
-                ObjectSchema::Tenant(ti) => Some(TenantInput {
-                    name: ti.name.clone(),
-                }),
-                ObjectSchema::User(_) => None,
-            },
-        };
-
-        let tenant_input = match maybe_tenant_input {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let tenant_id_param = match Uuid::from_str(&msg.uuid) {
-            Ok(i) => i,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        let reply = match update_tenant(&self.pool, &tenant_id_param, &tenant_input) {
-            Ok(r) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: Some(Object::Tenant(tenant_response_schema_from_tenant_respose(
-                    r,
-                ))),
-            },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
         };
 
         Ok(Response::new(reply))
@@ -208,267 +127,30 @@ impl Tenant for TenantSvc {
 
     async fn delete_tenant(
         &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
+        request: Request<DeleteTenantRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
         let msg = request.into_inner();
 
-        let tenant_id_param = match Uuid::from_str(&msg.uuid) {
+        let tenant_id_param = match Uuid::from_str(&msg.id) {
             Ok(i) => i,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
         };
 
         let reply = match delete_tenant(&self.pool, &tenant_id_param) {
-            Ok(_) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: None,
+            Ok(_) => StatusResponse { 
+                code: StatusResponseEnum::Ok.into(), 
+                message: None,
             },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
+            Err(err) => StatusResponse { 
+                code: StatusResponseEnum::Error.into(), 
+                message: Some(format!("{}", err)) 
+            },
         };
 
         Ok(Response::new(reply))
     }
-
-    #[doc = " User CRUD"]
-    async fn list_users(
-        &self,
-        request: Request<ListRequest>,
-    ) -> Result<Response<ListUserResponse>, Status> {
-        let msg: ListRequest = request.into_inner();
-
-        let maybe_filter = match msg.filter {
-            None => None,
-            Some(f) => match f {
-                list_request::Filter::User(fu) => Some(fu),
-                list_request::Filter::Tenant(_) => None,
-            },
-        };
-
-        let filter = match maybe_filter {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let tenant_id_param = match Uuid::from_str(&filter.tenant_id) {
-            Ok(i) => i,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        let reply = match list_users(&self.pool, &tenant_id_param, msg.limit, msg.offset) {
-            Ok(res) => ListUserResponse {
-                users: res
-                    .iter()
-                    .map(|t| Self::dbuser_to_user_response_schema(t))
-                    .collect(),
-            },
-            Err(err) => {
-                return Err(Status::unknown(format!("{}", err)));
-            }
-        };
-
-        Ok(Response::new(reply))
-    }
-    async fn get_user(
-        &self,
-        request: Request<GetRequest>,
-    ) -> Result<Response<UserResponseSchema>, Status> {
-        let msg: GetRequest = request.into_inner();
-
-        let maybe_filter = match msg.filter {
-            None => None,
-            Some(f) => match f {
-                Filter::User(fu) => Some(fu),
-                Filter::Tenant(_) => None,
-            },
-        };
-
-        let filter = match maybe_filter {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let tenant_id_param = match Uuid::from_str(&filter.tenant_id) {
-            Ok(i) => i,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        let reply = match get_user(
-            &self.pool,
-            &tenant_id_param,
-            empty_to_optional_string(&filter.email),
-            empty_to_optional_string(&filter.username),
-        ) {
-            Ok(res) => Self::dbuser_to_user_response_schema(&res),
-            Err(err) => {
-                return Err(Status::unknown(format!("{}", err)));
-            }
-        };
-
-        Ok(Response::new(reply))
-    }
-    async fn create_user(
-        &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
-        let msg = request.into_inner();
-
-        let maybe_user_input = match msg.object_schema {
-            None => None,
-            Some(i) => match i {
-                ObjectSchema::Tenant(_) => None,
-                ObjectSchema::User(ui) => match Uuid::from_str(&ui.tenant_id).ok() {
-                    None => None,
-                    Some(tenant_id_param) => Some(NewUser {
-                        username: ui.username.clone(),
-                        email: ui.email.clone(),
-                        tenant_id: tenant_id_param,
-                        pwhash: match bcrypt::hash(ui.password) {
-                            Ok(v) => v,
-                            Err(err) => return Err(Status::internal(format!("{}", err))),
-                        },
-                    }),
-                },
-            },
-        };
-
-        let user_input = match maybe_user_input {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let reply = match create_user(&self.pool, &user_input) {
-            Ok(r) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: Some(Object::User(UserResponseSchema {
-                    tenant_id: r.0.tenant_id.to_string(),
-                    uuid: r.0.id.to_string(),
-                    username: r.0.username.clone(),
-                    email: r.0.email.clone(),
-                    email_confirmed: r.0.email_confirmed.clone(),
-                })),
-            },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        Ok(Response::new(reply))
-    }
-    async fn update_user(
-        &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
-        let msg = request.into_inner();
-
-        let maybe_user_input = match msg.object_schema {
-            None => None,
-            Some(i) => match i {
-                ObjectSchema::Tenant(_) => None,
-                ObjectSchema::User(ui) => match Uuid::from_str(&ui.tenant_id).ok() {
-                    None => None,
-                    Some(tenant_id_param) => match Uuid::from_str(&msg.uuid).ok() {
-                        None => None,
-                        Some(user_uuid) => Some((
-                            tenant_id_param,
-                            user_uuid,
-                            empty_to_optional_string(&ui.username),
-                            empty_to_optional_string(&ui.email),
-                        )),
-                    },
-                },
-            },
-        };
-
-        let user_input = match maybe_user_input {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let reply = match update_user(
-            &self.pool,
-            &user_input.1,
-            &user_input.0,
-            user_input.2,
-            user_input.3,
-        ) {
-            Ok(r) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: Some(Object::User(UserResponseSchema {
-                    tenant_id: r.tenant_id.to_string(),
-                    uuid: r.id.to_string(),
-                    username: r.username.clone(),
-                    email: r.email.clone(),
-                    email_confirmed: r.email_confirmed.clone(),
-                })),
-            },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        Ok(Response::new(reply))
-    }
-    async fn delete_user(
-        &self,
-        request: Request<OperationRequest>,
-    ) -> Result<Response<OperationResponse>, Status> {
-        let msg = request.into_inner();
-
-        let maybe_user_input = match msg.object_schema {
-            None => None,
-            Some(i) => match i {
-                ObjectSchema::Tenant(_) => None,
-                ObjectSchema::User(ui) => match Uuid::from_str(&ui.tenant_id).ok() {
-                    None => None,
-                    Some(tenant_id_param) => match Uuid::from_str(&msg.uuid).ok() {
-                        None => None,
-                        Some(user_uuid) => Some((tenant_id_param, user_uuid)),
-                    },
-                },
-            },
-        };
-
-        let user_input = match maybe_user_input {
-            None => return Err(Status::invalid_argument("input expected")),
-            Some(i) => i,
-        };
-
-        let reply = match delete_user(&self.pool, &user_input.1, &user_input.0) {
-            Ok(_) => OperationResponse {
-                status: rpc::tenant::operation_response::Status::Success.into(),
-                response_message: "".to_string(),
-                object: None,
-            },
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        Ok(Response::new(reply))
-    }
-
-    async fn login(
-        &self,
-        request: Request<LoginRequest>,
-    ) -> Result<Response<LoginResponse>, Status> {
-        let msg: LoginRequest = request.into_inner();
-
-        let tenant_id_param = match Uuid::from_str(&msg.tenant_id) {
-            Ok(i) => i,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        //Find User
-        let db_user = match get_user(&self.pool, &tenant_id_param, Some(msg.username), None) {
-            Ok(u) => u,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        let reply = match self.login_db_user(db_user, &msg.password, false) {
-            Ok(token_repsonse) => token_repsonse,
-            Err(err) => return Err(Status::unknown(format!("{}", err))),
-        };
-
-        Ok(Response::new(reply))
-    }
-
-    async fn get_public_key(
+    
+    async fn get_server_public_key(
         &self,
         _request: Request<()>,
     ) -> Result<Response<PublicKeyResponse>, Status> {
@@ -483,6 +165,203 @@ impl Tenant for TenantSvc {
             public_key: vec![paserk],
         }))
     }
+
+    async fn list_principals(
+        &self,
+        request: Request<ListPrincipalRequest>,
+    ) -> Result<Response<ListPrincipalResponse>, Status> {
+        let msg = request.into_inner();
+
+        let filter = match msg.filter {
+            None => return Err(Status::invalid_argument("input expected")),
+            Some(i) => match Uuid::from_str(&i.tenant_id) {
+                Ok(i) => i,
+                Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+            },
+        };
+
+        let principals =  match list_principals_of_tenant(&self.pool, &filter, msg.limit, msg.offset) {
+            Ok(res) => ListPrincipalResponse {
+                principals: res
+                    .iter()
+                    .map(|t| PrincipalResponse {
+                        id: t.id.to_hyphenated().to_string(),
+                        name: t.p_name.clone(),
+                        email: t.email.clone(),
+                        email_confirmed: t.email_confirmed,
+                    })
+                    .collect(),
+            },
+            Err(err) => {
+                return Err(Status::unknown(format!("{}", err)));
+            }
+        };
+
+        Ok(Response::new(principals))
+    }
+
+    async fn get_principal(
+        &self,
+        request: Request<GetPrincipalRequest>,
+    ) -> Result<Response<PrincipalResponse>, Status> {
+        let msg = request.into_inner();
+
+        let filter = match msg.filter {
+            None => return Err(Status::invalid_argument("input expected")),
+            Some(i) => i,
+        };
+
+        let tenant_id =  match Uuid::from_str(&filter.tenant_id) {
+            Ok(i) => i,
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+        };
+
+        let (name, email) = if let Some(name_or_email) = filter.mail_or_name {
+            match name_or_email {
+                principal_filter::MailOrName::Email(email) => (None, Some(email)),
+                principal_filter::MailOrName::Name(name) => (Some(name), None),
+            }
+        } else {
+            (None, None)
+        };
+
+        let reply = match get_principal(&self.pool, &tenant_id, name, email) {
+            Ok(r) => PrincipalResponse {
+                id: r.id.to_hyphenated().to_string(),
+                name: r.p_name,
+                email: r.email,
+                email_confirmed: r.email_confirmed,
+            },
+            Err(err) => return Err(Status::unknown(format!("{}", err))),
+        };
+
+        Ok(Response::new(reply))
+    }
+
+    async fn create_principal(
+        &self,
+        request: Request<CreatePrincipalRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
+        let msg = request.into_inner();
+
+        let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
+            Ok(i) => i,
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+        };
+
+        let input = NewPrincipalInput { p_name: msg.name, email: msg.email, tenant_id};
+
+        let mail_token = if let Some(ref email) = input.email {
+            let rand_string: String = thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(30)
+                .map(char::from)
+                .collect();
+        
+            let mut claims = Claims::new().map_err(err_to_status)?;
+            claims.subject(&input.p_name).map_err(err_to_status)?;
+            claims.add_additional("tenant", input.tenant_id.to_hyphenated().to_string()).map_err(err_to_status)?;
+            claims.add_additional("email", email.clone()).map_err(err_to_status)?;
+            claims.token_identifier(&rand_string).map_err(err_to_status)?;
+
+            let mail_token = public::sign(
+                &self.secret_key,
+                &self.public_key,
+                &claims,
+                None,
+                None,
+            ).map_err(err_to_status)?;
+            Some(mail_token)
+        } else {
+            None
+        };
+
+        let reply = match create_principal(&self.pool, &input, mail_token, msg.public_keys) {
+            Ok(r) => {
+                if let Some(email) = r.email {
+                    StatusResponse { 
+                        code: StatusResponseEnum::Ok.into(), 
+                        message: Some(format!("verification mail sent to {}", email)), 
+                    }
+                } else {
+                    StatusResponse { 
+                        code: StatusResponseEnum::Ok.into(), 
+                        message: None, 
+                    }
+                }
+            },
+            Err(err) => StatusResponse { 
+                code: StatusResponseEnum::Error.into(), 
+                message: Some(format!("{}", err)), 
+            },
+        };
+
+        Ok(Response::new(reply))
+    }
+
+    async fn add_public_key_to_principal(
+        &self,
+        request: Request<AddPublicKeyRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
+        let msg = request.into_inner();
+
+        if msg.public_key.is_none() {
+            return Err(Status::invalid_argument("no public key provided"))
+        }
+
+        let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
+            Ok(i) => i,
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+        };
+
+        let principal = get_principal(&self.pool, &tenant_id, Some(msg.principal_name), None)
+            .map_err(err_to_status)?;
+
+        add_ssh_key_to_principal(&self.pool, &principal.id, msg.public_key.unwrap())
+            .map_err(err_to_status)?;
+
+        Ok(Response::new(StatusResponse { code: StatusResponseEnum::Ok.into(), message: None }))
+    }
+
+    async fn remove_public_key(
+        &self,
+        request: Request<RemovePublicKeyRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
+        let msg = request.into_inner();
+
+        let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
+            Ok(i) => i,
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+        };
+
+        let principal = get_principal(&self.pool, &tenant_id, Some(msg.principal_name), None)
+            .map_err(err_to_status)?;
+
+        remove_ssh_key_from_principal(&self.pool, &principal.id, &msg.fingerprint)
+            .map_err(err_to_status)?;
+
+        Ok(Response::new(StatusResponse { code: StatusResponseEnum::Ok.into(), message: None }))
+    }
+
+    async fn delete_principal(
+        &self,
+        request: Request<DeletePrincipalRequest>,
+    ) -> Result<Response<StatusResponse>, Status>{
+        let msg = request.into_inner();
+
+        let tenant_id =  match Uuid::from_str(&msg.tenant_id) {
+            Ok(i) => i,
+            Err(err) => return Err(Status::invalid_argument(format!("{}", err))),
+        };
+
+        let principal = get_principal(&self.pool, &tenant_id, Some(msg.principal_name), None)
+            .map_err(err_to_status)?;
+
+        delete_principal(&self.pool, &principal.id, &tenant_id)
+            .map_err(err_to_status)?;
+
+        Ok(Response::new(StatusResponse { code: StatusResponseEnum::Ok.into(), message: None }))
+    }
 }
 
 impl TenantSvc {
@@ -494,56 +373,6 @@ impl TenantSvc {
         })
     }
 
-    fn login_db_user(
-        &self,
-        user: DBUser,
-        password: &str,
-        remember: bool,
-    ) -> Result<LoginResponse> {
-        user.verify_pw_result(password)?;
-
-        // Setup the default claims, which include `iat` and `nbf` as the current time and `exp` of one hour.
-        // Add a custom `data` claim as well.
-        let mut claims = Claims::new()?;
-        claims.add_additional("data", "A public, signed message")?;
-
-        let auth_token = public::sign(
-            &self.secret_key,
-            &self.public_key,
-            &claims,
-            None,
-            Some(b"implicit assertion"),
-        )?;
-
-        let refresh_token = {
-            if remember {
-                Some(public::sign(
-                    &self.secret_key,
-                    &self.public_key,
-                    &claims,
-                    None,
-                    Some(b"implicit assertion"),
-                )?)
-            } else {
-                None
-            }
-        };
-
-        Ok(LoginResponse {
-            auth_token,
-            refresh_token,
-        })
-    }
-
-    fn dbuser_to_user_response_schema(res: &DBUser) -> UserResponseSchema {
-        UserResponseSchema {
-            tenant_id: res.tenant_id.to_string(),
-            uuid: res.id.to_string(),
-            username: res.username.clone(),
-            email: res.email.clone(),
-            email_confirmed: res.email_confirmed.clone(),
-        }
-    }
 }
 
 // TODO: Embed migrations
@@ -566,7 +395,7 @@ async fn main() -> Result<()> {
 
     info!("Loading Signature keys");
     let (pub_key_path, priv_key_path) = {
-        let keys_path = env::var("KEY_DIRECTORY").unwrap_or(String::from(concat!(
+        let keys_path = env::var("KEY_DIRECTORY").unwrap_or_else(|_| String::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/sample_data/keys"
         )));
@@ -578,9 +407,9 @@ async fn main() -> Result<()> {
 
     //let issuer_base = env::var("ISSUER_BASE").expect("ISSUER_BASE must be set");
     let private_key_bytes = std::fs::read(priv_key_path.clone())
-        .expect(format!("could not find private_key for JWT in {}", &priv_key_path).as_str());
+        .unwrap_or_else(|_| panic!("could not find private_key for JWT in {}", &priv_key_path));
     let public_key_bytes = std::fs::read(pub_key_path.clone())
-        .expect(format!("could not find public_key for JWT in {}", &pub_key_path).as_str());
+        .unwrap_or_else(|_| panic!("could not find public_key for JWT in {}", &pub_key_path));
 
     let private_key = PKey::private_key_from_pem(&private_key_bytes)?;
     let public_key = PKey::public_key_from_pem(&public_key_bytes)?;

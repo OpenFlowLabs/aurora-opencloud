@@ -1,4 +1,75 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeletePrincipalRequest {
+    #[prost(string, tag="1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemovePublicKeyRequest {
+    #[prost(string, tag="1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub fingerprint: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddPublicKeyRequest {
+    #[prost(string, tag="1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="3")]
+    pub public_key: ::core::option::Option<PublicKey>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreatePrincipalRequest {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="3")]
+    pub email: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, repeated, tag="4")]
+    pub public_keys: ::prost::alloc::vec::Vec<PublicKey>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PublicKey {
+    #[prost(string, optional, tag="1")]
+    pub fingerprint: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag="2")]
+    pub key_pem: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub key_openssh: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteTenantRequest {
+    #[prost(string, tag="1")]
+    pub id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateTenantRequest {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StatusResponse {
+    #[prost(enumeration="status_response::Status", tag="1")]
+    pub code: i32,
+    #[prost(string, optional, tag="2")]
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `StatusResponse`.
+pub mod status_response {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+    #[repr(i32)]
+    pub enum Status {
+        Ok = 0,
+        Error = 1,
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PingMsg {
     /// Who has pinged the server
     #[prost(string, tag="1")]
@@ -6,123 +77,11 @@ pub struct PingMsg {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PongMsg {
-    #[prost(enumeration="pong_msg::Status", tag="1")]
-    pub status: i32,
-}
-/// Nested message and enum types in `PongMsg`.
-pub mod pong_msg {
-    /// Smallest possible success message. I don't think we need to set it
-    /// to anything else than Success but Nice to have a way to tell a bit of a
-    /// status
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-    #[repr(i32)]
-    pub enum Status {
-        Success = 0,
-        Error = 1,
-        Maintenance = 2,
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct OperationRequest {
-    /// id on which to perform the operation
-    /// will be ignored for create but is mandatory on change operations
-    /// set if your API endpoint needs it.
     #[prost(string, tag="1")]
-    pub uuid: ::prost::alloc::string::String,
-    /// the serialized modification data to apply.
-    #[prost(oneof="operation_request::ObjectSchema", tags="2, 3")]
-    pub object_schema: ::core::option::Option<operation_request::ObjectSchema>,
-}
-/// Nested message and enum types in `OperationRequest`.
-pub mod operation_request {
-    /// the serialized modification data to apply.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum ObjectSchema {
-        #[prost(message, tag="2")]
-        Tenant(super::TenantOperationRequestSchema),
-        #[prost(message, tag="3")]
-        User(super::UserOperationRequestSchema),
-    }
+    pub pong: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TenantOperationRequestSchema {
-    #[prost(string, tag="1")]
-    pub name: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserOperationRequestSchema {
-    /// tenant id
-    #[prost(string, tag="1")]
-    pub tenant_id: ::prost::alloc::string::String,
-    /// username
-    #[prost(string, tag="2")]
-    pub username: ::prost::alloc::string::String,
-    /// password of the new user
-    #[prost(string, tag="3")]
-    pub password: ::prost::alloc::string::String,
-    /// email for the user
-    #[prost(string, tag="4")]
-    pub email: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct OperationResponse {
-    #[prost(enumeration="operation_response::Status", tag="1")]
-    pub status: i32,
-    /// an additional status message about the operation performed only set if there was an error
-    /// optional
-    #[prost(string, tag="2")]
-    pub response_message: ::prost::alloc::string::String,
-    /// serialized bytes of the Result of the operation
-    /// This allows to reduce API calls as the client can parse this field optionally if needed
-    /// If one wants client control over this use the boolean return result object
-    #[prost(oneof="operation_response::Object", tags="3, 4")]
-    pub object: ::core::option::Option<operation_response::Object>,
-}
-/// Nested message and enum types in `OperationResponse`.
-pub mod operation_response {
-    /// enum describing the kind of return
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-    #[repr(i32)]
-    pub enum Status {
-        Success = 0,
-        Error = 1,
-        Maintenance = 2,
-    }
-    /// serialized bytes of the Result of the operation
-    /// This allows to reduce API calls as the client can parse this field optionally if needed
-    /// If one wants client control over this use the boolean return result object
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Object {
-        #[prost(message, tag="3")]
-        User(super::UserResponseSchema),
-        #[prost(message, tag="4")]
-        Tenant(super::TenantResponseSchema),
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserResponseSchema {
-    /// tenant id
-    #[prost(string, tag="1")]
-    pub tenant_id: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
-    pub uuid: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
-    pub username: ::prost::alloc::string::String,
-    #[prost(string, tag="4")]
-    pub email: ::prost::alloc::string::String,
-    #[prost(bool, tag="5")]
-    pub email_confirmed: bool,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TenantResponseSchema {
-    /// tenant id
-    #[prost(string, tag="1")]
-    pub uuid: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
-    pub name: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListRequest {
+pub struct ListTenantRequest {
     /// limit of amount of records to return
     #[prost(uint64, tag="1")]
     pub limit: u64,
@@ -130,48 +89,50 @@ pub struct ListRequest {
     #[prost(uint64, tag="2")]
     pub offset: u64,
     /// filter to filter entities by
-    #[prost(oneof="list_request::Filter", tags="3, 4")]
-    pub filter: ::core::option::Option<list_request::Filter>,
-}
-/// Nested message and enum types in `ListRequest`.
-pub mod list_request {
-    /// filter to filter entities by
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Filter {
-        #[prost(message, tag="3")]
-        User(super::UserFilter),
-        #[prost(message, tag="4")]
-        Tenant(super::TenantFilter),
-    }
+    #[prost(message, optional, tag="3")]
+    pub filter: ::core::option::Option<TenantFilter>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetRequest {
+pub struct ListPrincipalRequest {
+    /// limit of amount of records to return
+    #[prost(uint64, tag="1")]
+    pub limit: u64,
+    /// offeset after which entry to return results
+    #[prost(uint64, tag="2")]
+    pub offset: u64,
     /// filter to filter entities by
-    #[prost(oneof="get_request::Filter", tags="3, 4")]
-    pub filter: ::core::option::Option<get_request::Filter>,
-}
-/// Nested message and enum types in `GetRequest`.
-pub mod get_request {
-    /// filter to filter entities by
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Filter {
-        #[prost(message, tag="3")]
-        User(super::UserFilter),
-        #[prost(message, tag="4")]
-        Tenant(super::TenantFilter),
-    }
+    #[prost(message, optional, tag="3")]
+    pub filter: ::core::option::Option<PrincipalFilter>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserFilter {
+pub struct GetTenantRequest {
+    /// filter to filter entities by
+    #[prost(message, optional, tag="1")]
+    pub filter: ::core::option::Option<TenantFilter>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrincipalRequest {
+    /// filter to filter entities by
+    #[prost(message, optional, tag="1")]
+    pub filter: ::core::option::Option<PrincipalFilter>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrincipalFilter {
     /// tenant (this is mandatory)
     #[prost(string, tag="1")]
     pub tenant_id: ::prost::alloc::string::String,
-    /// email, either this or username needs to be set
-    #[prost(string, tag="2")]
-    pub email: ::prost::alloc::string::String,
-    /// username, either this or email needs to be set
-    #[prost(string, tag="3")]
-    pub username: ::prost::alloc::string::String,
+    #[prost(oneof="principal_filter::MailOrName", tags="2, 3")]
+    pub mail_or_name: ::core::option::Option<principal_filter::MailOrName>,
+}
+/// Nested message and enum types in `PrincipalFilter`.
+pub mod principal_filter {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum MailOrName {
+        #[prost(string, tag="2")]
+        Email(::prost::alloc::string::String),
+        #[prost(string, tag="3")]
+        Name(::prost::alloc::string::String),
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TenantFilter {
@@ -181,30 +142,31 @@ pub struct TenantFilter {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListTenantResponse {
-    #[prost(message, repeated, tag="2")]
-    pub tenants: ::prost::alloc::vec::Vec<TenantResponseSchema>,
+    #[prost(message, repeated, tag="1")]
+    pub tenants: ::prost::alloc::vec::Vec<TenantResponse>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListUserResponse {
-    #[prost(message, repeated, tag="2")]
-    pub users: ::prost::alloc::vec::Vec<UserResponseSchema>,
+pub struct ListPrincipalResponse {
+    #[prost(message, repeated, tag="1")]
+    pub principals: ::prost::alloc::vec::Vec<PrincipalResponse>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LoginRequest {
+pub struct PrincipalResponse {
     #[prost(string, tag="1")]
-    pub tenant_id: ::prost::alloc::string::String,
+    pub id: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub username: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
-    pub password: ::prost::alloc::string::String,
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="3")]
+    pub email: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bool, optional, tag="4")]
+    pub email_confirmed: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LoginResponse {
-    /// The JWT token used for authentication
+pub struct TenantResponse {
     #[prost(string, tag="1")]
-    pub auth_token: ::prost::alloc::string::String,
-    #[prost(string, optional, tag="2")]
-    pub refresh_token: ::core::option::Option<::prost::alloc::string::String>,
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PublicKeyResponse {
@@ -294,10 +256,10 @@ pub mod tenant_client {
             let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/Ping");
             self.inner.unary(request.into_request(), path, codec).await
         }
-        /// Tenant CRUD
+        /// Tenant Public API
         pub async fn list_tenants(
             &mut self,
-            request: impl tonic::IntoRequest<super::ListRequest>,
+            request: impl tonic::IntoRequest<super::ListTenantRequest>,
         ) -> Result<tonic::Response<super::ListTenantResponse>, tonic::Status> {
             self.inner
                 .ready()
@@ -316,8 +278,8 @@ pub mod tenant_client {
         }
         pub async fn get_tenant(
             &mut self,
-            request: impl tonic::IntoRequest<super::GetRequest>,
-        ) -> Result<tonic::Response<super::TenantResponseSchema>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::GetTenantRequest>,
+        ) -> Result<tonic::Response<super::TenantResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -333,8 +295,8 @@ pub mod tenant_client {
         }
         pub async fn create_tenant(
             &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::CreateTenantRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -350,29 +312,10 @@ pub mod tenant_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn update_tenant(
-            &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/tenant.Tenant/UpdateTenant",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
         pub async fn delete_tenant(
             &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::DeleteTenantRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -388,11 +331,11 @@ pub mod tenant_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        /// User CRUD
-        pub async fn list_users(
+        /// Principal Public API
+        pub async fn list_principals(
             &mut self,
-            request: impl tonic::IntoRequest<super::ListRequest>,
-        ) -> Result<tonic::Response<super::ListUserResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::ListPrincipalRequest>,
+        ) -> Result<tonic::Response<super::ListPrincipalResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -403,13 +346,15 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/ListUsers");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/ListPrincipals",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn get_user(
+        pub async fn get_principal(
             &mut self,
-            request: impl tonic::IntoRequest<super::GetRequest>,
-        ) -> Result<tonic::Response<super::UserResponseSchema>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::GetPrincipalRequest>,
+        ) -> Result<tonic::Response<super::PrincipalResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -420,13 +365,15 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/GetUser");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/GetPrincipal",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn create_user(
+        pub async fn create_principal(
             &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::CreatePrincipalRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -437,13 +384,15 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/CreateUser");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/CreatePrincipal",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn update_user(
+        pub async fn add_public_key_to_principal(
             &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::AddPublicKeyRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -454,13 +403,15 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/UpdateUser");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/AddPublicKeyToPrincipal",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn delete_user(
+        pub async fn remove_public_key(
             &mut self,
-            request: impl tonic::IntoRequest<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RemovePublicKeyRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -471,14 +422,15 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/DeleteUser");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/RemovePublicKey",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        ///Authentication API
-        pub async fn login(
+        pub async fn delete_principal(
             &mut self,
-            request: impl tonic::IntoRequest<super::LoginRequest>,
-        ) -> Result<tonic::Response<super::LoginResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::DeletePrincipalRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -489,10 +441,12 @@ pub mod tenant_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/Login");
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/DeletePrincipal",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn get_public_key(
+        pub async fn get_server_public_key(
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> Result<tonic::Response<super::PublicKeyResponse>, tonic::Status> {
@@ -507,7 +461,7 @@ pub mod tenant_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/tenant.Tenant/GetPublicKey",
+                "/tenant.Tenant/GetServerPublicKey",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -526,54 +480,49 @@ pub mod tenant_server {
             &self,
             request: tonic::Request<super::PingMsg>,
         ) -> Result<tonic::Response<super::PongMsg>, tonic::Status>;
-        /// Tenant CRUD
+        /// Tenant Public API
         async fn list_tenants(
             &self,
-            request: tonic::Request<super::ListRequest>,
+            request: tonic::Request<super::ListTenantRequest>,
         ) -> Result<tonic::Response<super::ListTenantResponse>, tonic::Status>;
         async fn get_tenant(
             &self,
-            request: tonic::Request<super::GetRequest>,
-        ) -> Result<tonic::Response<super::TenantResponseSchema>, tonic::Status>;
+            request: tonic::Request<super::GetTenantRequest>,
+        ) -> Result<tonic::Response<super::TenantResponse>, tonic::Status>;
         async fn create_tenant(
             &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
-        async fn update_tenant(
-            &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
+            request: tonic::Request<super::CreateTenantRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
         async fn delete_tenant(
             &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
-        /// User CRUD
-        async fn list_users(
+            request: tonic::Request<super::DeleteTenantRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        /// Principal Public API
+        async fn list_principals(
             &self,
-            request: tonic::Request<super::ListRequest>,
-        ) -> Result<tonic::Response<super::ListUserResponse>, tonic::Status>;
-        async fn get_user(
+            request: tonic::Request<super::ListPrincipalRequest>,
+        ) -> Result<tonic::Response<super::ListPrincipalResponse>, tonic::Status>;
+        async fn get_principal(
             &self,
-            request: tonic::Request<super::GetRequest>,
-        ) -> Result<tonic::Response<super::UserResponseSchema>, tonic::Status>;
-        async fn create_user(
+            request: tonic::Request<super::GetPrincipalRequest>,
+        ) -> Result<tonic::Response<super::PrincipalResponse>, tonic::Status>;
+        async fn create_principal(
             &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
-        async fn update_user(
+            request: tonic::Request<super::CreatePrincipalRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn add_public_key_to_principal(
             &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
-        async fn delete_user(
+            request: tonic::Request<super::AddPublicKeyRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn remove_public_key(
             &self,
-            request: tonic::Request<super::OperationRequest>,
-        ) -> Result<tonic::Response<super::OperationResponse>, tonic::Status>;
-        ///Authentication API
-        async fn login(
+            request: tonic::Request<super::RemovePublicKeyRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn delete_principal(
             &self,
-            request: tonic::Request<super::LoginRequest>,
-        ) -> Result<tonic::Response<super::LoginResponse>, tonic::Status>;
-        async fn get_public_key(
+            request: tonic::Request<super::DeletePrincipalRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn get_server_public_key(
             &self,
             request: tonic::Request<()>,
         ) -> Result<tonic::Response<super::PublicKeyResponse>, tonic::Status>;
@@ -664,7 +613,7 @@ pub mod tenant_server {
                 "/tenant.Tenant/ListTenants" => {
                     #[allow(non_camel_case_types)]
                     struct ListTenantsSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::ListRequest>
+                    impl<T: Tenant> tonic::server::UnaryService<super::ListTenantRequest>
                     for ListTenantsSvc<T> {
                         type Response = super::ListTenantResponse;
                         type Future = BoxFuture<
@@ -673,7 +622,7 @@ pub mod tenant_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ListRequest>,
+                            request: tonic::Request<super::ListTenantRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move {
@@ -702,16 +651,16 @@ pub mod tenant_server {
                 "/tenant.Tenant/GetTenant" => {
                     #[allow(non_camel_case_types)]
                     struct GetTenantSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::GetRequest>
+                    impl<T: Tenant> tonic::server::UnaryService<super::GetTenantRequest>
                     for GetTenantSvc<T> {
-                        type Response = super::TenantResponseSchema;
+                        type Response = super::TenantResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetRequest>,
+                            request: tonic::Request<super::GetTenantRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).get_tenant(request).await };
@@ -738,16 +687,18 @@ pub mod tenant_server {
                 "/tenant.Tenant/CreateTenant" => {
                     #[allow(non_camel_case_types)]
                     struct CreateTenantSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::CreateTenantRequest>
                     for CreateTenantSvc<T> {
-                        type Response = super::OperationResponse;
+                        type Response = super::StatusResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::OperationRequest>,
+                            request: tonic::Request<super::CreateTenantRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move {
@@ -773,57 +724,21 @@ pub mod tenant_server {
                     };
                     Box::pin(fut)
                 }
-                "/tenant.Tenant/UpdateTenant" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdateTenantSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
-                    for UpdateTenantSvc<T> {
-                        type Response = super::OperationResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::OperationRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).update_tenant(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateTenantSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/tenant.Tenant/DeleteTenant" => {
                     #[allow(non_camel_case_types)]
                     struct DeleteTenantSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::DeleteTenantRequest>
                     for DeleteTenantSvc<T> {
-                        type Response = super::OperationResponse;
+                        type Response = super::StatusResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::OperationRequest>,
+                            request: tonic::Request<super::DeleteTenantRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move {
@@ -849,236 +764,25 @@ pub mod tenant_server {
                     };
                     Box::pin(fut)
                 }
-                "/tenant.Tenant/ListUsers" => {
+                "/tenant.Tenant/ListPrincipals" => {
                     #[allow(non_camel_case_types)]
-                    struct ListUsersSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::ListRequest>
-                    for ListUsersSvc<T> {
-                        type Response = super::ListUserResponse;
+                    struct ListPrincipalsSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::ListPrincipalRequest>
+                    for ListPrincipalsSvc<T> {
+                        type Response = super::ListPrincipalResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ListRequest>,
+                            request: tonic::Request<super::ListPrincipalRequest>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).list_users(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = ListUsersSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/GetUser" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetUserSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::GetRequest>
-                    for GetUserSvc<T> {
-                        type Response = super::UserResponseSchema;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).get_user(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = GetUserSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/CreateUser" => {
-                    #[allow(non_camel_case_types)]
-                    struct CreateUserSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
-                    for CreateUserSvc<T> {
-                        type Response = super::OperationResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::OperationRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).create_user(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = CreateUserSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/UpdateUser" => {
-                    #[allow(non_camel_case_types)]
-                    struct UpdateUserSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
-                    for UpdateUserSvc<T> {
-                        type Response = super::OperationResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::OperationRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).update_user(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UpdateUserSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/DeleteUser" => {
-                    #[allow(non_camel_case_types)]
-                    struct DeleteUserSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::OperationRequest>
-                    for DeleteUserSvc<T> {
-                        type Response = super::OperationResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::OperationRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).delete_user(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = DeleteUserSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/Login" => {
-                    #[allow(non_camel_case_types)]
-                    struct LoginSvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<super::LoginRequest>
-                    for LoginSvc<T> {
-                        type Response = super::LoginResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::LoginRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).login(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = LoginSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/tenant.Tenant/GetPublicKey" => {
-                    #[allow(non_camel_case_types)]
-                    struct GetPublicKeySvc<T: Tenant>(pub Arc<T>);
-                    impl<T: Tenant> tonic::server::UnaryService<()>
-                    for GetPublicKeySvc<T> {
-                        type Response = super::PublicKeyResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move {
-                                (*inner).get_public_key(request).await
+                                (*inner).list_principals(request).await
                             };
                             Box::pin(fut)
                         }
@@ -1088,7 +792,242 @@ pub mod tenant_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = GetPublicKeySvc(inner);
+                        let method = ListPrincipalsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/GetPrincipal" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPrincipalSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::GetPrincipalRequest>
+                    for GetPrincipalSvc<T> {
+                        type Response = super::PrincipalResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetPrincipalRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).get_principal(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/CreatePrincipal" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreatePrincipalSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::CreatePrincipalRequest>
+                    for CreatePrincipalSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreatePrincipalRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).create_principal(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CreatePrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/AddPublicKeyToPrincipal" => {
+                    #[allow(non_camel_case_types)]
+                    struct AddPublicKeyToPrincipalSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::AddPublicKeyRequest>
+                    for AddPublicKeyToPrincipalSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AddPublicKeyRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).add_public_key_to_principal(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AddPublicKeyToPrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RemovePublicKey" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemovePublicKeySvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::RemovePublicKeyRequest>
+                    for RemovePublicKeySvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RemovePublicKeyRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).remove_public_key(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemovePublicKeySvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/DeletePrincipal" => {
+                    #[allow(non_camel_case_types)]
+                    struct DeletePrincipalSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::DeletePrincipalRequest>
+                    for DeletePrincipalSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DeletePrincipalRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).delete_principal(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = DeletePrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/GetServerPublicKey" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetServerPublicKeySvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<()>
+                    for GetServerPublicKeySvc<T> {
+                        type Response = super::PublicKeyResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).get_server_public_key(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetServerPublicKeySvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
