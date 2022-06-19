@@ -3,9 +3,9 @@ use slog::Drain;
 use std::sync::Mutex;
 
 pub use anyhow::{bail, Result};
-pub use thiserror::{Error};
 pub use slog::{o, Logger};
 pub use slog_scope::{debug, error, info, set_global_logger, trace, warn};
+pub use thiserror::Error;
 
 /**
  * Initialise a logger which writes to stdout, and which does the right thing on

@@ -1,14 +1,14 @@
-use crate::database::schema::{user_confirmations, principals, public_keys, principals_pks};
+use crate::database::schema::{principals, principals_pks, public_keys, user_confirmations};
 use crate::database::PGPool;
 use crate::rpc::tenant::PublicKey;
+use anyhow::{anyhow, bail};
 use common::*;
 use diesel::prelude::*;
+use pasetors::keys::AsymmetricPublicKey;
+use pasetors::paserk::FormatAsPaserk;
+use pasetors::version4::V4;
 use thiserror::Error;
 use uuid::Uuid;
-use anyhow::{bail, anyhow};
-use pasetors::paserk::FormatAsPaserk;
-use pasetors::keys::AsymmetricPublicKey;
-use pasetors::version4::V4;
 
 #[derive(Error, Debug)]
 pub enum PrincipalRepoError {
@@ -24,7 +24,11 @@ pub fn get_principal(
 ) -> Result<Principal> {
     if let Some(email_param) = email_param {
         Ok(principals::table
-            .filter(principals::email.eq(email_param).and(principals::tenant_id.eq(tenant_id_param)))
+            .filter(
+                principals::email
+                    .eq(email_param)
+                    .and(principals::tenant_id.eq(tenant_id_param)),
+            )
             .first::<Principal>(&pool.get()?)?)
     } else if let Some(name_param) = name_param {
         Ok(principals::table
@@ -39,21 +43,21 @@ pub fn get_principal(
     }
 }
 
-pub fn get_principal_with_key(
-    pool: &PGPool,
-    fingerprint: &str,
-) -> Result<PrincipalWithKey> {
+pub fn get_principal_with_key(pool: &PGPool, fingerprint: &str) -> Result<PrincipalWithKey> {
     public_keys::table
         .inner_join(principals_pks::table.inner_join(principals::table))
         .filter(public_keys::fingerprint.eq(fingerprint))
-        .select((principals::columns::id, 
-            principals::columns::tenant_id, 
-            principals::columns::p_name, 
-            principals::columns::email, 
-            principals::columns::email_confirmed, 
-            public_keys::columns::fingerprint, 
-            public_keys::columns::public_key_paserk))
-        .first::<PrincipalWithKey>(&pool.get()?).map_err(|err| anyhow!("{}", err))
+        .select((
+            principals::columns::id,
+            principals::columns::tenant_id,
+            principals::columns::p_name,
+            principals::columns::email,
+            principals::columns::email_confirmed,
+            public_keys::columns::fingerprint,
+            public_keys::columns::public_key_paserk,
+        ))
+        .first::<PrincipalWithKey>(&pool.get()?)
+        .map_err(|err| anyhow!("{}", err))
 }
 
 pub fn list_principals_of_tenant(
@@ -83,7 +87,12 @@ pub fn list_principals_of_tenant(
     Ok(results)
 }
 
-pub fn create_principal(pool: &PGPool, input: &NewPrincipalInput, mail_token: Option<String>, pub_keys: Vec<PublicKey>) -> Result<Principal> {
+pub fn create_principal(
+    pool: &PGPool,
+    input: &NewPrincipalInput,
+    mail_token: Option<String>,
+    pub_keys: Vec<PublicKey>,
+) -> Result<Principal> {
     if pub_keys.is_empty() {
         bail!("no public key provided")
     }
@@ -99,20 +108,22 @@ pub fn create_principal(pool: &PGPool, input: &NewPrincipalInput, mail_token: Op
             let mail = if let Some(ref email) = principal.email {
                 email
             } else {
-                bail!("tried to create mail confirmation for principal {} but email is empty", &principal.p_name)
+                bail!(
+                    "tried to create mail confirmation for principal {} but email is empty",
+                    &principal.p_name
+                )
             };
 
-            let confirmation = NewConfirmation{ 
-                p_id: &principal.id, 
-                tenant_id: &principal.tenant_id, 
-                token: &mail_token, 
-                email: mail, 
+            let confirmation = NewConfirmation {
+                p_id: &principal.id,
+                tenant_id: &principal.tenant_id,
+                token: &mail_token,
+                email: mail,
             };
 
             diesel::insert_into(user_confirmations::table)
                 .values(&confirmation)
                 .execute(conn)?;
-
         }
 
         for key in pub_keys {
@@ -128,16 +139,21 @@ pub fn create_principal(pool: &PGPool, input: &NewPrincipalInput, mail_token: Op
                 ossh_key.fingerprint()
             };
 
-            diesel::insert_into(public_keys::table).values(NewKeyInput{ 
-                fingerprint: &fingerprint, 
-                public_key: &key.key_openssh,
-                public_key_pem: &key.key_pem,
-                public_key_paserk: &paserk, 
-            }).execute(conn)?;
+            diesel::insert_into(public_keys::table)
+                .values(NewKeyInput {
+                    fingerprint: &fingerprint,
+                    public_key: &key.key_openssh,
+                    public_key_pem: &key.key_pem,
+                    public_key_paserk: &paserk,
+                })
+                .execute(conn)?;
 
-            diesel::insert_into(principals_pks::table).values(NewKeyPrincipalLinkInput{ 
-                p_id: &principal.id, fingerprint: &fingerprint 
-            }).execute(conn)?;
+            diesel::insert_into(principals_pks::table)
+                .values(NewKeyPrincipalLinkInput {
+                    p_id: &principal.id,
+                    fingerprint: &fingerprint,
+                })
+                .execute(conn)?;
         }
 
         Ok(principal)
@@ -148,7 +164,6 @@ pub fn add_ssh_key_to_principal(pool: &PGPool, principal_id: &Uuid, key: PublicK
     let conn = &pool.get()?;
 
     conn.build_transaction().read_write().run(move || {
-
         let ossh_key = openssh_keys::PublicKey::parse(&key.key_openssh)?;
         let pem_key = openssl::pkey::PKey::public_key_from_pem(key.key_pem.as_bytes())?;
         let parsed_key = AsymmetricPublicKey::<V4>::from(&pem_key.raw_public_key()?)?;
@@ -161,33 +176,40 @@ pub fn add_ssh_key_to_principal(pool: &PGPool, principal_id: &Uuid, key: PublicK
             ossh_key.fingerprint()
         };
 
-        diesel::insert_into(public_keys::table).values(NewKeyInput{ 
-            fingerprint: &fingerprint, 
-            public_key: &key.key_openssh,
-            public_key_pem: &key.key_pem,
-            public_key_paserk: &paserk, 
-        }).execute(conn)?;
+        diesel::insert_into(public_keys::table)
+            .values(NewKeyInput {
+                fingerprint: &fingerprint,
+                public_key: &key.key_openssh,
+                public_key_pem: &key.key_pem,
+                public_key_paserk: &paserk,
+            })
+            .execute(conn)?;
 
-        diesel::insert_into(principals_pks::table).values(NewKeyPrincipalLinkInput{ 
-            p_id: principal_id, fingerprint: &fingerprint 
-        }).execute(conn)?;
+        diesel::insert_into(principals_pks::table)
+            .values(NewKeyPrincipalLinkInput {
+                p_id: principal_id,
+                fingerprint: &fingerprint,
+            })
+            .execute(conn)?;
 
         Ok(())
     })
 }
 
-pub fn remove_ssh_key_from_principal(pool: &PGPool, principal_id: &Uuid, fingerprint: &str) -> Result<()> {
+pub fn remove_ssh_key_from_principal(
+    pool: &PGPool,
+    principal_id: &Uuid,
+    fingerprint: &str,
+) -> Result<()> {
     let conn = &pool.get()?;
 
     conn.build_transaction().read_write().run(move || {
-
         let public_key_target = principals_pks::table
             .filter(principals_pks::fingerprint.eq(fingerprint))
             .filter(principals_pks::p_id.eq(principal_id));
         diesel::delete(public_key_target).execute(conn)?;
 
-        let public_key_target = public_keys::table
-            .filter(public_keys::fingerprint.eq(fingerprint));
+        let public_key_target = public_keys::table.filter(public_keys::fingerprint.eq(fingerprint));
         diesel::delete(public_key_target).execute(conn)?;
 
         Ok(())
@@ -195,7 +217,9 @@ pub fn remove_ssh_key_from_principal(pool: &PGPool, principal_id: &Uuid, fingerp
 }
 
 pub fn delete_principal(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &Uuid) -> Result<()> {
-    let target = principals::table.filter(principals::tenant_id.eq(tenant_id_param)).find(user_id_param);
+    let target = principals::table
+        .filter(principals::tenant_id.eq(tenant_id_param))
+        .find(user_id_param);
     diesel::delete(target).execute(&pool.get()?)?;
     Ok(())
 }
