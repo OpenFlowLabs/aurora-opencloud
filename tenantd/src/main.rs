@@ -12,10 +12,10 @@ mod rpc;
 use crate::database::principal::{
     add_ssh_key_to_principal, create_principal, delete_principal, get_principal,
     get_principal_with_key, list_principals_of_tenant, remove_ssh_key_from_principal,
-    NewPrincipalInput,
+    NewPrincipalInput, get_principal_by_id,
 };
 use crate::database::tenant::{
-    create_tenant, delete_tenant, get_tenant, list_tenants, TenantInput,
+    create_tenant, delete_tenant, get_tenant, list_tenants, TenantInput, get_tenant_by_id,
 };
 use crate::rpc::tenant::*;
 use common::*;
@@ -57,6 +57,21 @@ fn err_to_unauthenticated(err: impl std::fmt::Display) -> Status {
     Status::unauthenticated(format!("{}", err))
 }
 
+fn get_claim_uuid(claims: &Claims, claim_name: &str) -> Result<Option<Uuid>> {
+    let id_value = claims.get_claim(claim_name);
+    if let Some(id_value) = id_value {
+        let id_string = id_value.as_str();
+        if let Some(id_string) = id_string {
+            let id = Uuid::from_str(id_string)?;
+            Ok(Some(id))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
 fn make_mail_token(
     email: Option<String>,
     principal_name: &str,
@@ -96,8 +111,29 @@ fn make_mail_token(
 #[tonic::async_trait]
 impl Tenant for TenantSvc {
     async fn ping(&self, request: Request<PingMsg>) -> Result<Response<PongMsg>, Status> {
+        // See if we have an Authenticated ping
+        let (msg, claims) = if request.metadata().get("authorization").is_some() {
+            let (msg, claims) = self.authenticate_and_extract_message(request)?;
+            (msg, Some(claims))
+        } else {
+            (request.into_inner(), None)
+        };
+
         // Log the ping we have gotten so we see some traffic
-        let message = format!("received ping from: {}", request.into_inner().sender);
+        let message = if let Some(claims) = claims {
+            let principal_id = get_claim_uuid(&claims, "id")
+                .map_err(err_to_status)?.ok_or_else(|| Status::invalid_argument("bad id"))?;
+            let tenant_id = get_claim_uuid(&claims, "tenant")
+                .map_err(err_to_status)?.ok_or_else(|| Status::invalid_argument("bad id"))?;
+
+            let principal = get_principal_by_id(&self.pool, &tenant_id, &principal_id)
+                .map_err(err_to_status)?;
+            let tenant = get_tenant_by_id(&self.pool, &principal.tenant_id)
+                .map_err(err_to_status)?;
+            format!("received authenticated ping from: {}, by principal {}@{}", msg.sender, principal.p_name, tenant.name)
+        } else {
+            format!("received ping from: {}", msg.sender)
+        };
         info!("{}", &message);
 
         let reply = PongMsg { pong: message };
@@ -109,7 +145,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<ListTenantRequest>,
     ) -> Result<Response<ListTenantResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let reply = match list_tenants(&self.pool, msg.limit, msg.offset) {
             Ok(res) => ListTenantResponse {
@@ -133,7 +169,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<GetTenantRequest>,
     ) -> Result<Response<TenantResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -155,7 +191,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<CreateTenantRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let reply = match create_tenant(&self.pool, &TenantInput { name: msg.name }) {
             Ok(_) => StatusResponse {
@@ -175,7 +211,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<DeleteTenantRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let tenant_id_param = match Uuid::from_str(&msg.id) {
             Ok(i) => i,
@@ -216,7 +252,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<ListPrincipalRequest>,
     ) -> Result<Response<ListPrincipalResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -251,7 +287,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<GetPrincipalRequest>,
     ) -> Result<Response<PrincipalResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let filter = match msg.filter {
             None => return Err(Status::invalid_argument("input expected")),
@@ -289,7 +325,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<CreatePrincipalRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let tenant_id = match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -338,7 +374,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<AddPublicKeyRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let tenant_id = match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -361,7 +397,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<RemovePublicKeyRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let tenant_id = match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -384,7 +420,7 @@ impl Tenant for TenantSvc {
         &self,
         request: Request<DeletePrincipalRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        let msg = self.authenticate_and_extract_message(request)?;
+        let (msg, _) = self.authenticate_and_extract_message(request)?;
 
         let tenant_id = match Uuid::from_str(&msg.tenant_id) {
             Ok(i) => i,
@@ -412,7 +448,7 @@ impl TenantSvc {
         })
     }
 
-    fn authenticate_and_extract_message<T>(&self, req: Request<T>) -> Result<T, Status> {
+    fn authenticate_and_extract_message<T>(&self, req: Request<T>) -> Result<(T, Claims), Status> {
         let client_token = req
             .metadata()
             .get("authorization")
@@ -430,7 +466,7 @@ impl TenantSvc {
             .map_err(err_to_unauthenticated)?;
 
         //TODO: Authorization
-        let _claims = if footer.contains_claim("fingerprint") {
+        let claims = if footer.contains_claim("fingerprint") {
             let fingerprint_value = footer
                 .get_claim("fingerprint")
                 .ok_or_else(|| Status::unauthenticated("No claims in the token"))?;
@@ -470,14 +506,12 @@ impl TenantSvc {
                 .clone()
         };
 
-        Ok(req.into_inner())
+        Ok((req.into_inner(), claims))
     }
 }
 
 // TODO: Embed migrations
 // https://docs.diesel.rs/1.4.x/diesel_migrations/macro.embed_migrations.html
-
-// TODO: use clap for the daemon and initialize subcommands
 
 use clap::{Parser, Subcommand};
 
@@ -497,6 +531,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum CliCommands {
+    // Run the server
+    #[clap(about)]
     Serve {
         #[clap(long, short, default_value_t = String::from("127.0.0.1"), value_parser)]
         listen: String,
@@ -504,10 +540,14 @@ enum CliCommands {
         #[clap(long, short, default_value_t = String::from("50051"), value_parser)]
         port: String,
     },
+    // Create a new tenant inside the database
+    #[clap(about)] 
     CreateTenant {
         #[clap(value_parser)]
         name: String,
     },
+    // Create a Principal inside the database
+    #[clap(about)]
     CreatePrincipal {
         #[clap(value_parser)]
         tenant: String,
@@ -580,9 +620,7 @@ async fn serve<P: AsRef<Path>>(
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let logger = init_log();
-    // slog_stdlog uses the logger from slog_scope, so set a logger there
-    let _guard = set_global_logger(logger);
+    let _guard = init_slog_logging(false)?;
 
     dotenv().ok();
 
@@ -626,7 +664,10 @@ async fn main() -> Result<()> {
                 AsymmetricSecretKey::<V4>::from(&private_key.raw_private_key()?)?,
                 AsymmetricPublicKey::<V4>::from(&server_public_key.raw_public_key()?)?,
             );
+
+            debug!("Getting tenant from DB");
             let tenant = get_tenant(&pool, &tenant)?;
+            debug!("tenant id is {}, with name {}", &tenant.id, &tenant.name);
 
             let input = NewPrincipalInput {
                 p_name: principal_name.clone(),
@@ -634,6 +675,7 @@ async fn main() -> Result<()> {
                 tenant_id: tenant.id,
             };
 
+            debug!("Generating email token");
             let mail_token = make_mail_token(
                 email,
                 &principal_name,
@@ -642,12 +684,15 @@ async fn main() -> Result<()> {
                 &server_public_key,
             )?;
 
+            info!("Loading Public key");
             let public_key = if Path::exists(Path::new(&public_key)) {
+                debug!("Reading keyfile {}", &public_key);
                 fs::read_to_string(Path::new(&public_key))?
             } else {
                 public_key
             };
 
+            info!("Adding Principal to DB");
             let principal = create_principal(&pool, &input, mail_token, vec![public_key])?;
 
             info!("Created Principal {}@{}", principal.p_name, tenant.name);

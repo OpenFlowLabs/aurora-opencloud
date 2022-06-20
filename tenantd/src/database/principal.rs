@@ -1,6 +1,5 @@
 use crate::database::schema::{principals, principals_pks, public_keys, user_confirmations};
 use crate::database::PGPool;
-use anyhow::{anyhow, bail};
 use common::*;
 use diesel::prelude::*;
 use osshkeys::{keys::FingerprintHash, PublicKey as SSHPublicKey, PublicParts};
@@ -41,6 +40,20 @@ pub fn get_principal(
     } else {
         bail!(PrincipalRepoError::InvalidInput)
     }
+}
+
+pub fn get_principal_by_id(
+    pool: &PGPool,
+    tenant_id_param: &Uuid,
+    principal_id: &Uuid
+) -> Result<Principal> {
+    Ok(principals::table
+        .filter(
+            principals::id
+                .eq(principal_id)
+                .and(principals::tenant_id.eq(tenant_id_param)),
+        )
+        .first::<Principal>(&pool.get()?)?)
 }
 
 pub fn get_principal_with_key(pool: &PGPool, fingerprint: &str) -> Result<PrincipalWithKey> {
@@ -98,13 +111,15 @@ pub fn create_principal(
     }
 
     let conn = &pool.get()?;
-
+    trace!("Starting Transaction");
     conn.build_transaction().read_write().run(move || {
+        trace!("Inserting Principal records");
         let principal: Principal = diesel::insert_into(principals::table)
             .values(input)
             .get_result(conn)?;
 
         if let Some(mail_token) = mail_token {
+            trace!("Inserting email token for verification");
             let mail = if let Some(ref email) = principal.email {
                 email
             } else {
@@ -126,7 +141,9 @@ pub fn create_principal(
                 .execute(conn)?;
         }
 
+
         for key in pub_keys {
+            trace!("Inserting Public key for Authentification");
             let public_key = public_key_from_keystring(&key)?;
             let fingerprint = public_key.fingerprint.clone();
 
@@ -197,15 +214,19 @@ pub fn delete_principal(pool: &PGPool, user_id_param: &Uuid, tenant_id_param: &U
 }
 
 pub(crate) fn public_key_from_keystring(key_string: &str) -> Result<PublicKey> {
+    trace!("Parsing OpenSSH Public Key");
     let ossh_key = SSHPublicKey::from_keystr(key_string)?;
 
+    trace!("Writing PEM Key");
     let pem_key_string = ossh_key.serialize_pem()?;
 
+    trace!("Creating PASERK formated key");
     let ossl_pem_key = openssl::pkey::PKey::public_key_from_pem(pem_key_string.as_bytes())?;
     let parsed_key = AsymmetricPublicKey::<V4>::from(&ossl_pem_key.raw_public_key()?)?;
     let mut paserk = String::new();
     parsed_key.fmt(&mut paserk)?;
 
+    trace!("Getting Fingerprint");
     let fingerprint = hex::encode(ossh_key.fingerprint(FingerprintHash::SHA256)?);
 
     Ok(PublicKey {

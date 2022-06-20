@@ -1,0 +1,3 @@
+[submodule "osshkeys"]
+	path = osshkeys
+	url = https://github.com/Toasterson/rust-osshkeys.git

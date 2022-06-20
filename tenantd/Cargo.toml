@@ -20,7 +20,7 @@ chrono = "0.4.19"
 pwhash = "1.0.0"
 rand = "0.8.5"
 pasetors = {version = "0.5.0", features = ["paserk"]}
-osshkeys = "0.6.1"
+osshkeys = {version = "0.6.1", path = "../osshkeys"}
 openssl = "0.10"
 serde_json = "1.0"
 anyhow = "1"

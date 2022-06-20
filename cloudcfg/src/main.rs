@@ -9,8 +9,7 @@ use rpc::tenant::PingMsg;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = TenantClient::connect("http://127.0.0.1:50051").await?;
-    let logger = init_log();
-    let _guard = set_global_logger(logger);
+    let _guard = init_slog_logging(false)?;
     let request = tonic::Request::new(PingMsg {
         sender: "cloudcfg".into(),
     });

@@ -13,6 +13,14 @@ pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Result<Tenant> {
     Ok(tenant)
 }
 
+pub fn get_tenant_by_id(pool: &PGPool, tenant_id: &Uuid) -> Result<Tenant> {
+    let tenant = tenants::table
+        .filter(tenants::id.eq(tenant_id))
+        .limit(1)
+        .first::<Tenant>(&pool.get()?)?;
+    Ok(tenant)
+}
+
 pub fn list_tenants(pool: &PGPool, limit: u64, offset: u64) -> Result<Vec<Tenant>> {
     let results: Vec<Tenant>;
     if offset != 0 && limit != 0 {
