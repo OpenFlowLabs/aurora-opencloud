@@ -7,3 +7,5 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:0-${VARIANT}
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
    && apt-get -y install clang lld postgresql-client-13 cmake \
    && apt-get autoremove -y && apt-get clean -y
+
+RUN cargo install diesel_cli

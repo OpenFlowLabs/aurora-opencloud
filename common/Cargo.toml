@@ -6,13 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-slog = { version = "2.7.0", features = ["max_level_trace", "release_max_level_info"] }
+slog = { version = "2.7.0", features = ["max_level_info", "release_max_level_info"] }
 slog-term = "2.9.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.1"
 slog-async = "2.7"
 slog-syslog = { version = "0.13"}
-log = "0.4"
+log = { version = "0.4" , features = ["max_level_info", "release_max_level_info"]}
 atty = "0.2"
 anyhow = "1"
 thiserror = "1"

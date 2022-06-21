@@ -49,12 +49,12 @@ pub struct TenantSvc {
     secret_key: AsymmetricSecretKey<V4>,
 }
 
-fn err_to_status(err: impl std::fmt::Display) -> Status {
-    Status::internal(format!("{}", err))
+fn err_to_status(err: impl std::fmt::Debug + std::fmt::Display) -> Status {
+    Status::internal(format!("{}", dbg!(err)))
 }
 
-fn err_to_unauthenticated(err: impl std::fmt::Display) -> Status {
-    Status::unauthenticated(format!("{}", err))
+fn err_to_unauthenticated(err: impl std::fmt::Debug + std::fmt::Display) -> Status {
+    Status::unauthenticated(format!("{}", dbg!(err)))
 }
 
 fn get_claim_uuid(claims: &Claims, claim_name: &str) -> Result<Option<Uuid>> {
@@ -70,6 +70,18 @@ fn get_claim_uuid(claims: &Claims, claim_name: &str) -> Result<Option<Uuid>> {
     } else {
         Ok(None)
     }
+}
+
+fn parse_claim_subject(claim: Option<&serde_json::Value>) -> Option<(String, String)> {
+    if let Some(subject) = claim {
+        if let Some(subject) = subject.as_str() {
+            let split = subject.split_once('@');
+            if let Some((principal, tenant)) = split {
+                return Some((principal.to_owned(), tenant.to_owned()));
+            }
+        } 
+    }
+    None
 }
 
 fn make_mail_token(
@@ -121,18 +133,21 @@ impl Tenant for TenantSvc {
 
         // Log the ping we have gotten so we see some traffic
         let message = if let Some(claims) = claims {
-            let principal_id = get_claim_uuid(&claims, "id")
-                .map_err(err_to_status)?.ok_or_else(|| Status::invalid_argument("bad id"))?;
-            let tenant_id = get_claim_uuid(&claims, "tenant")
-                .map_err(err_to_status)?.ok_or_else(|| Status::invalid_argument("bad id"))?;
+            let (principal, tenant) = parse_claim_subject(claims.get_claim("sub")).ok_or_else(|| Status::invalid_argument("bad id"))?;
+            
+            let tenant = get_tenant(&self.pool, &tenant)
+            .map_err(err_to_status)?;
 
-            let principal = get_principal_by_id(&self.pool, &tenant_id, &principal_id)
+            let principal = get_principal(&self.pool, &tenant.id, None, Some(principal))
                 .map_err(err_to_status)?;
-            let tenant = get_tenant_by_id(&self.pool, &principal.tenant_id)
-                .map_err(err_to_status)?;
-            format!("received authenticated ping from: {}, by principal {}@{}", msg.sender, principal.p_name, tenant.name)
+           
+            let message = format!("received authenticated ping from: {}, by principal {}@{}", msg.sender, principal.p_name, tenant.name);
+            info!("{}", &message);
+            message
         } else {
-            format!("received ping from: {}", msg.sender)
+            let message = format!("received ping from: {}", msg.sender);
+            info!("{}", &message);
+            message
         };
         info!("{}", &message);
 
@@ -451,7 +466,7 @@ impl TenantSvc {
     fn authenticate_and_extract_message<T>(&self, req: Request<T>) -> Result<(T, Claims), Status> {
         let client_token = req
             .metadata()
-            .get("authorization")
+            .get(AUTHORIZATION_HEADER)
             .ok_or_else(|| Status::unauthenticated("No auth token provided"))?;
 
         let validation_rules = ClaimsValidationRules::new();
@@ -478,8 +493,13 @@ impl TenantSvc {
             let principal =
                 get_principal_with_key(&self.pool, fingerprint).map_err(err_to_unauthenticated)?;
 
+            let ossl_public_key = openssl::pkey::PKey::public_key_from_pem(principal.public_key_pem.as_bytes())
+                .map_err(err_to_unauthenticated)?;
+            let raw_key_bytes = ossl_public_key.raw_public_key()
+                .map_err(err_to_unauthenticated)?;
+
             let public_key =
-                AsymmetricPublicKey::<V4>::try_from(principal.public_key_paserk.as_str())
+                AsymmetricPublicKey::<V4>::from(&raw_key_bytes)
                     .map_err(err_to_unauthenticated)?;
 
             let trusted_token =

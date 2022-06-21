@@ -67,6 +67,7 @@ pub fn get_principal_with_key(pool: &PGPool, fingerprint: &str) -> Result<Princi
             principals::columns::email,
             principals::columns::email_confirmed,
             public_keys::columns::fingerprint,
+            public_keys::columns::public_key_pem,
             public_keys::columns::public_key_paserk,
         ))
         .first::<PrincipalWithKey>(&pool.get()?)
@@ -287,5 +288,6 @@ pub struct PrincipalWithKey {
     pub email: Option<String>,
     pub email_confirmed: Option<bool>,
     pub public_key_paserk: String,
+    pub public_key_pem: String,
     pub fingerprint: String,
 }

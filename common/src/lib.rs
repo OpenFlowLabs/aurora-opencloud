@@ -7,6 +7,8 @@ use slog_term::{CompactFormat, TermDecorator};
 pub use log::{debug, error, info, trace, warn};
 pub use thiserror::Error;
 
+pub static AUTHORIZATION_HEADER: &str = "authorization";
+
 /**
  * Initialise a logger which writes to stdout, and which does the right thing on
  * both an interactive terminal and when stdout is not a tty.
