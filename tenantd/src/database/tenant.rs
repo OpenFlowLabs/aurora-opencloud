@@ -13,6 +13,7 @@ pub fn get_tenant(pool: &PGPool, tenant_name: &str) -> Result<Tenant> {
     Ok(tenant)
 }
 
+#[allow(dead_code)]
 pub fn get_tenant_by_id(pool: &PGPool, tenant_id: &Uuid) -> Result<Tenant> {
     let tenant = tenants::table
         .filter(tenants::id.eq(tenant_id))

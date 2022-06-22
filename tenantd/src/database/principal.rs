@@ -42,10 +42,11 @@ pub fn get_principal(
     }
 }
 
+#[allow(dead_code)]
 pub fn get_principal_by_id(
     pool: &PGPool,
     tenant_id_param: &Uuid,
-    principal_id: &Uuid
+    principal_id: &Uuid,
 ) -> Result<Principal> {
     Ok(principals::table
         .filter(
@@ -141,7 +142,6 @@ pub fn create_principal(
                 .values(&confirmation)
                 .execute(conn)?;
         }
-
 
         for key in pub_keys {
             trace!("Inserting Public key for Authentification");

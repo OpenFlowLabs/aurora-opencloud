@@ -12,10 +12,10 @@ mod rpc;
 use crate::database::principal::{
     add_ssh_key_to_principal, create_principal, delete_principal, get_principal,
     get_principal_with_key, list_principals_of_tenant, remove_ssh_key_from_principal,
-    NewPrincipalInput, get_principal_by_id,
+    NewPrincipalInput,
 };
 use crate::database::tenant::{
-    create_tenant, delete_tenant, get_tenant, list_tenants, TenantInput, get_tenant_by_id,
+    create_tenant, delete_tenant, get_tenant, list_tenants, TenantInput,
 };
 use crate::rpc::tenant::*;
 use common::*;
@@ -35,11 +35,11 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use rpc::tenant::status_response::Status as StatusResponseEnum;
 use rpc::tenant::tenant_server::{Tenant, TenantServer};
-use std::{env, fs};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{env, fs};
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 
@@ -57,6 +57,7 @@ fn err_to_unauthenticated(err: impl std::fmt::Debug + std::fmt::Display) -> Stat
     Status::unauthenticated(format!("{}", dbg!(err)))
 }
 
+#[allow(dead_code)]
 fn get_claim_uuid(claims: &Claims, claim_name: &str) -> Result<Option<Uuid>> {
     let id_value = claims.get_claim(claim_name);
     if let Some(id_value) = id_value {
@@ -79,7 +80,7 @@ fn parse_claim_subject(claim: Option<&serde_json::Value>) -> Option<(String, Str
             if let Some((principal, tenant)) = split {
                 return Some((principal.to_owned(), tenant.to_owned()));
             }
-        } 
+        }
     }
     None
 }
@@ -133,15 +134,18 @@ impl Tenant for TenantSvc {
 
         // Log the ping we have gotten so we see some traffic
         let message = if let Some(claims) = claims {
-            let (principal, tenant) = parse_claim_subject(claims.get_claim("sub")).ok_or_else(|| Status::invalid_argument("bad id"))?;
-            
-            let tenant = get_tenant(&self.pool, &tenant)
-            .map_err(err_to_status)?;
+            let (principal, tenant) = parse_claim_subject(claims.get_claim("sub"))
+                .ok_or_else(|| Status::invalid_argument("bad id"))?;
+
+            let tenant = get_tenant(&self.pool, &tenant).map_err(err_to_status)?;
 
             let principal = get_principal(&self.pool, &tenant.id, None, Some(principal))
                 .map_err(err_to_status)?;
-           
-            let message = format!("received authenticated ping from: {}, by principal {}@{}", msg.sender, principal.p_name, tenant.name);
+
+            let message = format!(
+                "received authenticated ping from: {}, by principal {}@{}",
+                msg.sender, principal.p_name, tenant.name
+            );
             info!("{}", &message);
             message
         } else {
@@ -493,14 +497,15 @@ impl TenantSvc {
             let principal =
                 get_principal_with_key(&self.pool, fingerprint).map_err(err_to_unauthenticated)?;
 
-            let ossl_public_key = openssl::pkey::PKey::public_key_from_pem(principal.public_key_pem.as_bytes())
-                .map_err(err_to_unauthenticated)?;
-            let raw_key_bytes = ossl_public_key.raw_public_key()
+            let ossl_public_key =
+                openssl::pkey::PKey::public_key_from_pem(principal.public_key_pem.as_bytes())
+                    .map_err(err_to_unauthenticated)?;
+            let raw_key_bytes = ossl_public_key
+                .raw_public_key()
                 .map_err(err_to_unauthenticated)?;
 
             let public_key =
-                AsymmetricPublicKey::<V4>::from(&raw_key_bytes)
-                    .map_err(err_to_unauthenticated)?;
+                AsymmetricPublicKey::<V4>::from(&raw_key_bytes).map_err(err_to_unauthenticated)?;
 
             let trusted_token =
                 public::verify(&public_key, &untrusted_token, &validation_rules, None, None)
@@ -561,7 +566,7 @@ enum CliCommands {
         port: String,
     },
     // Create a new tenant inside the database
-    #[clap(about)] 
+    #[clap(about)]
     CreateTenant {
         #[clap(value_parser)]
         name: String,

@@ -1,10 +1,10 @@
 pub use anyhow::{anyhow, bail, Result};
+pub use log::{debug, error, info, trace, warn};
 use slog::{Drain, Logger};
 use slog_async::Async;
 use slog_scope::{set_global_logger, GlobalLoggerGuard};
 use slog_syslog::Facility;
 use slog_term::{CompactFormat, TermDecorator};
-pub use log::{debug, error, info, trace, warn};
 pub use thiserror::Error;
 
 pub static AUTHORIZATION_HEADER: &str = "authorization";

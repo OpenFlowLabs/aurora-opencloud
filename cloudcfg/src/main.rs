@@ -2,21 +2,21 @@ extern crate common;
 
 mod rpc;
 
-use std::path::{PathBuf, Path};
-use std::fs::File;
-use std::collections::HashMap;
-use pasetors::footer::Footer;
-use serde::{Serialize, Deserialize};
+use clap::{Parser, Subcommand};
 use common::*;
+use osshkeys::keys::FingerprintHash;
+use osshkeys::PublicParts;
+use pasetors::claims::Claims;
+use pasetors::footer::Footer;
+use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
+use pasetors::version4::V4;
+use prettytable::{cell, row, Table};
 use rpc::tenant::tenant_client::TenantClient;
 use rpc::tenant::PingMsg;
-use clap::{Parser, Subcommand};
-use prettytable::{Table, cell, row};
-use pasetors::claims::{Claims};
-use pasetors::version4::V4;
-use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
-use osshkeys::{PublicParts};
-use osshkeys::keys::FingerprintHash;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
 static AUTH_FILE_LOCATION: &str = "aurora-opencloud/principals.yaml";
 static CONFIG_FILE_LOCATION: &str = "aurora-opencloud/config.yaml";
@@ -42,13 +42,13 @@ fn get_config_location() -> PathBuf {
 #[clap(author, version, about, long_about = None)]
 #[clap(propagate_version = true)]
 struct Cli {
-    #[clap(long, short, default_value="127.0.0.1")]
+    #[clap(long, short, default_value = "127.0.0.1")]
     host: String,
 
-    #[clap(long, short, default_value="50051")]
+    #[clap(long, short, default_value = "50051")]
     port: String,
 
-    #[clap(long, short, default_value="false")]
+    #[clap(long, short, default_value = "false")]
     secure_connection: bool,
 
     #[clap(subcommand)]
@@ -81,13 +81,13 @@ enum AuthCommands {
         #[clap(value_parser)]
         key_location: String,
 
-        #[clap(short='p', long, action)]
+        #[clap(short = 'p', long, action)]
         passphrase: bool,
     },
     Remove {
         #[clap(value_parser)]
         name: String,
-    }
+    },
 }
 
 impl Cli {
@@ -105,10 +105,10 @@ struct AuthEntry {
     name: String,
     key_location: String,
     pk_fingerprint: String,
-    passphrase: bool
+    passphrase: bool,
 }
 
-fn read_config() -> Result<HashMap<String,String>> {
+fn read_config() -> Result<HashMap<String, String>> {
     let config_file_path = get_config_location();
     if !config_file_path.exists() {
         return Ok(HashMap::new());
@@ -118,7 +118,7 @@ fn read_config() -> Result<HashMap<String,String>> {
     Ok(config_struct)
 }
 
-fn write_config(config_struct: HashMap<String,String>) -> Result<()> {
+fn write_config(config_struct: HashMap<String, String>) -> Result<()> {
     let config_file_path = get_config_location();
     if !config_file_path.exists() {
         let mut config_dir = config_file_path.clone();
@@ -163,7 +163,7 @@ fn write_auth_config(auth_struct: Vec<AuthEntry>) -> Result<()> {
 fn get_auth_entry<'a>(name: &str, entries: &'a [AuthEntry]) -> Result<&'a AuthEntry> {
     for entry in entries {
         if entry.name == name {
-            return Ok(entry)
+            return Ok(entry);
         }
     }
     bail!("no entry named {}", name)
@@ -172,13 +172,19 @@ fn get_auth_entry<'a>(name: &str, entries: &'a [AuthEntry]) -> Result<&'a AuthEn
 struct KeyPairWithFingerprint {
     fingerprint: String,
     secret: AsymmetricSecretKey<V4>,
-    public: AsymmetricPublicKey<V4>
+    public: AsymmetricPublicKey<V4>,
 }
 
-fn read_key<P: AsRef<Path>>(key_path: P, passphrase: Option<&str>) -> Result<KeyPairWithFingerprint> {
+fn read_key<P: AsRef<Path>>(
+    key_path: P,
+    passphrase: Option<&str>,
+) -> Result<KeyPairWithFingerprint> {
     let secret_key_str = std::fs::read_to_string(key_path.as_ref())?;
     let ossl_key = if let Some(passphrase) = passphrase {
-        openssl::pkey::PKey::private_key_from_pem_passphrase(secret_key_str.as_bytes(), passphrase.as_bytes())
+        openssl::pkey::PKey::private_key_from_pem_passphrase(
+            secret_key_str.as_bytes(),
+            passphrase.as_bytes(),
+        )
     } else {
         openssl::pkey::PKey::private_key_from_pem(secret_key_str.as_bytes())
     }?;
@@ -191,13 +197,13 @@ fn read_key<P: AsRef<Path>>(key_path: P, passphrase: Option<&str>) -> Result<Key
     let public_key = pasetors::keys::AsymmetricPublicKey::<V4>::from(&ossl_key.raw_public_key()?)?;
     let ossh_public_key_string = String::from_utf8(ossl_key.public_key_to_pem()?)?;
     let ossh_public_key = osshkeys::PublicKey::from_keystr(&ossh_public_key_string)?;
-    
+
     let fingerprint = hex::encode(ossh_public_key.fingerprint(FingerprintHash::SHA256)?);
 
-    Ok(KeyPairWithFingerprint{ 
+    Ok(KeyPairWithFingerprint {
         fingerprint,
-        public: public_key, 
-        secret: secret_key, 
+        public: public_key,
+        secret: secret_key,
     })
 }
 
@@ -214,8 +220,12 @@ fn make_token_for_auth_entry(entry: &AuthEntry) -> Result<String> {
     }?;
 
     let token = pasetors::public::sign(
-        &keypair.secret, &keypair.public, 
-        &claims, Some(&footer), None)?;
+        &keypair.secret,
+        &keypair.public,
+        &claims,
+        Some(&footer),
+        None,
+    )?;
     Ok(token)
 }
 
@@ -257,7 +267,7 @@ async fn main() -> Result<()> {
 
                 write_config(config_struct)?;
             }
-        },
+        }
         Commands::Auth { cmd } => {
             let mut auth_struct = read_auth_config()?;
             match cmd {
@@ -270,23 +280,27 @@ async fn main() -> Result<()> {
                         table.add_row(row![
                             entry.name,
                             entry.pk_fingerprint,
-                            entry.key_location, 
+                            entry.key_location,
                             entry.passphrase,
                         ]);
                     }
 
                     // Print the table to stdout
                     table.printstd();
-                },
-                AuthCommands::Add { name, key_location, passphrase } => {
+                }
+                AuthCommands::Add {
+                    name,
+                    key_location,
+                    passphrase,
+                } => {
                     //TODO: read passphrase from console
                     let keypair = read_key(&key_location, None)?;
 
-                    auth_struct.push(AuthEntry { 
+                    auth_struct.push(AuthEntry {
                         name: name.clone(),
                         pk_fingerprint: keypair.fingerprint,
-                        key_location, 
-                        passphrase 
+                        key_location,
+                        passphrase,
                     });
 
                     info!("Writing auth config");
@@ -294,15 +308,16 @@ async fn main() -> Result<()> {
                     let mut config: HashMap<String, String> = HashMap::new();
                     config.insert(CURRENT_AUTH_ENTRY_KEY.to_owned(), name);
                     write_config(config)?;
-                },
+                }
                 AuthCommands::Remove { name } => {
-                    let auth_struct: Vec<AuthEntry> = auth_struct.into_iter().filter(|entry| {
-                        entry.name != name
-                    }).collect();
+                    let auth_struct: Vec<AuthEntry> = auth_struct
+                        .into_iter()
+                        .filter(|entry| entry.name != name)
+                        .collect();
                     write_auth_config(auth_struct)?;
-                },
+                }
             }
-        },
+        }
         Commands::Ping => {
             let mut request = tonic::Request::new(PingMsg {
                 sender: "cloudcfg".into(),
@@ -310,18 +325,20 @@ async fn main() -> Result<()> {
 
             let config = read_config();
             let auth = read_auth_config();
-            if config.is_ok() && auth.is_ok() {
-                let config = config.unwrap();
-                let auth = auth.unwrap();
-                let entry = get_auth_entry(&config[CURRENT_AUTH_ENTRY_KEY], &auth)?;
-                let token = make_token_for_auth_entry(entry)?;
-                request.metadata_mut().insert(AUTHORIZATION_HEADER, token.parse()?);
+            if let Ok(config) = config {
+                if let Ok(auth) = auth {
+                    let entry = get_auth_entry(&config[CURRENT_AUTH_ENTRY_KEY], &auth)?;
+                    let token = make_token_for_auth_entry(entry)?;
+                    request
+                        .metadata_mut()
+                        .insert(AUTHORIZATION_HEADER, token.parse()?);
+                }
             }
 
             let response = client.ping(request).await?;
 
             info!("Pong Status: {}", response.into_inner().pong);
-        },
+        }
     }
 
     Ok(())
