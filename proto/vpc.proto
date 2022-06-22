@@ -1,0 +1,61 @@
+syntax = "proto3";
+package vpc;
+import "google/protobuf/empty.proto";
+
+service VPC {
+    rpc ListVPCS(ListVPCRequest) returns (ListVPCResponse);
+    rpc CreateVPC(CreateVPCRequest) returns (StatusResponse);
+    rpc GetVPC(GetVPCRequest) returns (VPCSchema);
+}
+
+message GetVPCRequest {
+    string tenant_id = 1;
+    optional bool get_dedault = 2;
+    optional string id = 3;
+    optional string cidr = 4;
+}
+
+message StatusResponse {
+    enum Status {
+      OK = 0;
+      ERROR = 1;
+    }
+    Status code = 1;
+    optional string message = 2;
+}
+
+message CreateVPCRequest {
+    string tenant_id = 1;
+    bool is_tenant_default = 3;
+    enum VPCType {
+        ETHERSTUB = 0;
+        DISTRIBUTED_ETHERSTUB = 1;
+    }
+    VPCType vpc_type = 4;
+    string ip_pool_cidr = 5;
+}
+
+message ListVPCRequest {
+    oneof tenant {
+        string tenant_id = 1;
+        string tenant_name = 2;
+    }
+}
+
+message ListVPCResponse {
+    string tenant_id = 1;
+    string tenant_name = 2;
+    repeated VPCSchema vpcs = 3; 
+}
+
+message VPCSchema {
+    string tenant_id = 1;
+    string id = 2;
+    bool is_tenant_default = 3;
+    enum VPCType {
+        ETHERSTUB = 0;
+        DISTRIBUTED_ETHERSTUB = 1;
+    }
+    VPCType vpc_type = 4;
+    string ip_pool_cidr = 5;
+}

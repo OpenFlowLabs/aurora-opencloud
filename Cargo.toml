@@ -4,6 +4,7 @@ members = [
   "cloudcfg",
   "cloudadm",
   "tenantd",
+  "vpcd",
   "common",
   "osshkeys"
 ]
