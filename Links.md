@@ -12,3 +12,12 @@
 
 # Diesel Docs from other pages
 - https://stackoverflow.com/questions/52279553/what-is-the-standard-pattern-to-relate-three-tables-many-to-many-relation-with
+
+# S3
+- https://garagehq.deuxfleurs.fr/documentation/quick-start/
+
+# Image Manifest Triton
+- https://github.com/TritonDataCenter/node-imgmanifest/blob/master/lib/imgmanifest.js
+
+# Rust Doors bindings
+- https://oxidecomputer.github.io/rusty-doors/rusty_doors/index.html
