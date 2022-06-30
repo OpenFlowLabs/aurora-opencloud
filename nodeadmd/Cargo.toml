@@ -1,0 +1,16 @@
+[package]
+name = "nodeadmd"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+netidx = "0.10.5"
+common = { path = "../common" }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+log = "0.4"
+anyhow = "1"
+thiserror = "1"
+clap = { version = "3.2", features = ["derive", "env"]}
+rusty-doors = {git = "https://github.com/oxidecomputer/rusty-doors.git"}
