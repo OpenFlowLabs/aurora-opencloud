@@ -16,6 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn compile_protos(proto: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> io::Result<()> {
+    std::env::set_var("PROTOC", "/usr/local/bin/protoc");
+
     let proto_path: &Path = proto.as_ref();
 
     // directory the main .proto file resides in

@@ -1,0 +1,14 @@
+[package]
+name = "opcimage"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+knuffel = {version="2.0.0", features=["derive"]}
+
+[dev-dependencies]
+pretty_assertions = {version="*"} 
+miette = { version="4.7.1", features=["fancy"]}
+

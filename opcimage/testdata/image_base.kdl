@@ -1,0 +1,22 @@
+base-on "img://openindiana.org/hipster"
+author "John Doe <john.doe@example.com>"
+name "my-image"
+volume "data" {
+    mountpoint "/var/lib/pgdata"
+    (zfs)checksum "off"
+    (zfs)compression "lz4"
+    (zfs)copies "3"
+    (foo)bar "1"
+}
+ips {
+    packages "developer/gcc-11" "golang" "golang-118"
+    uninstall "userland-incorportation"
+    install-optionals
+    property image.prop="false"
+    publisher "openindiana.org" "https://pkg.openindiana.org/hipster"
+    ca "openindiana.org" "/path/to/cert/in/image/bundle"
+    variant opensolaris.zone="global"
+    facet my.facet.name="true"
+    mediator "mysql" implementation="mariadb"
+    purge-history
+}

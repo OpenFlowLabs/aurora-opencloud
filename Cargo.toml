@@ -7,6 +7,8 @@ members = [
   "vpcd",
   "nodeadm",
   "nodeadmd",
+  "opcimage",
+  "image-builder",
   "common",
   "osshkeys"
 ]
