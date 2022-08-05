@@ -1,4 +1,4 @@
-use std::{path::PathBuf, collections::HashMap};
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
 pub struct Document {
@@ -18,41 +18,53 @@ pub struct Document {
 pub enum Action {
     Volume(Volume),
     Remove(#[knuffel(argument)] String),
-    ExtractTar(#[knuffel(argument)] String),
-    DevfsAdm(#[knuffel(argument, default = true)] bool),
+    ExtractTarball(#[knuffel(argument)] String),
+    InitializeDevfs,
     AssembleFile(AssembleFile),
     Group(#[knuffel(argument)] String),
-    User(#[knuffel(argument)] String),
+    User(
+        #[knuffel(argument)] String,
+        #[knuffel(argument)] Option<String>,
+    ),
     Symlink(Symlink),
     Dir(Dir),
     File(File),
     Perm(Dir),
     Ips(Ips),
-    SeedSmf(#[knuffel(argument, default = true)] bool),
+    SeedSmf,
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
 pub struct Ips {
-    #[knuffel(child, unwrap(arguments))]
+    #[knuffel(children)]
+    pub actions: Vec<IpsActions>,
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct IpsProperties {
+    #[knuffel(properties)]
+    pub properties: HashMap<String, String>,
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct IpsPackageList {
+    #[knuffel(arguments)]
     pub packages: Vec<String>,
-    #[knuffel(child)]
-    pub install_optionals: bool,
-    #[knuffel(children(name="property"), unwrap(properties))]
-    pub properties: Vec<HashMap<String,String>>,
-    #[knuffel(children(name="publisher"))]
-    pub publishers: Vec<IpsPublisher>,
-    #[knuffel(children(name="ca"))]
-    pub ca_certificates: Vec<CaCertificates>,
-    #[knuffel(child, unwrap(arguments))]
-    pub uninstall: Vec<String>,
-    #[knuffel(children(name="variant"), unwrap(properties))]
-    pub variants: Vec<HashMap<String,String>>,
-    #[knuffel(children(name="facet"), unwrap(properties))]
-    pub facets: Vec<HashMap<String,String>>,
-    #[knuffel(child)]
-    pub purge_history: bool,
-    #[knuffel(children(name="mediator"))]
-    pub mediators: Vec<Mediator>
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub enum IpsActions {
+    InitializeImage,
+    InstallPackages(IpsPackageList),
+    InstallOptionals,
+    SetProperty(IpsProperties),
+    SetPublisher(IpsPublisher),
+    ApprovePublisherCA(CaCertificates),
+    UninstallPackages(IpsPackageList),
+    SetVariant(IpsProperties),
+    SetFacet(IpsProperties),
+    PurgeHistory,
+    SetMediator(Mediator),
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -62,7 +74,7 @@ pub struct Mediator {
     #[knuffel(property)]
     pub implementation: Option<String>,
     #[knuffel(property)]
-    pub version: Option<String>
+    pub version: Option<String>,
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -141,7 +153,7 @@ pub struct VolumeProperty {
     pub name: String,
     #[knuffel(argument)]
     pub value: String,
-    #[knuffel(type_name, default="")]
+    #[knuffel(type_name, default = "")]
     pub driver_name: String,
 }
 

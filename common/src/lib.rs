@@ -1,3 +1,5 @@
+pub mod illumos;
+
 pub use anyhow::{anyhow, bail, Result};
 pub use log::{debug, error, info, trace, warn};
 use slog::{Drain, Logger};
@@ -33,4 +35,8 @@ pub fn init_slog_logging(use_syslog: bool) -> Result<GlobalLoggerGuard> {
 
         Ok(scope_guard)
     }
+}
+
+pub fn path_split(full_path: &str) -> Option<(&str, &str)> {
+    full_path.rsplit_once('/')
 }

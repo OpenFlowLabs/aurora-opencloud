@@ -1,0 +1,74 @@
+author "Till Wegmueller <till.wegmueller@openflowlabs.com>"
+name "zones/base"
+
+ips {
+    initialize-image
+    install-packages "entire" "minimal_install"
+    set-publisher "openindiana.org" "https://pkg.openindiana.org/hipster"
+    set-variant opensolaris.zone="nonglobal"
+    set-variant opensolaris.imagetype="full"
+
+    install-packages "vim"\
+        "rsync"\
+        "system/virtualization/mdata-client"\
+        "system/library/gcc-4-runtime"\
+        "system/library/g++-4-runtime"\
+        "diagnostic/diskinfo"\
+        "system/monitoring/arcstat"
+
+    uninstall-packages "minimal_install"\
+        "driver/pcmcia"\
+        "diagnostic/ddu/data"\
+        "diagnostic/ddu/library"\
+        "diagnostic/ddu/text"\
+        "service/management/sysding"\
+        "service/network/smtp/sendmail"\
+        "system/network/nis"
+    purge-history
+}
+
+seed-smf
+
+initialize-devfs
+
+symlink "/etc/svc/profile/generic.xml" "/etc/svc/profile/generic_limited_net.xml" {
+    owner "root"
+    group "root"
+}
+
+symlink "/etc/svc/profile/inetd_services.xml" "/etc/svc/profile/inetd_generic.xml" {
+    owner "root"
+    group "root"
+}
+
+symlink "/etc/svc/profile/platform.xml" "/etc/svc/profile/platform_none.xml" {
+    owner "root"
+    group "root"
+}
+
+symlink "/etc/svc/profile/name_service.xml" "/etc/svc/profile/ns_dns.xml" {
+    owner "root"
+    group "root"
+}
+
+user "root" "NP"
+
+file "/etc/inet/hosts" {
+    src "files/hosts"
+    owner "root"
+    group "root"
+    mode "644"
+}
+
+file "/etc/nodename" {
+    content "unknown\n"
+    owner "root"
+    group "root"
+    mode "644"
+}
+
+file "/etc/resolv.conf" {
+    owner "root"
+    group "root"
+    mode "644"
+}

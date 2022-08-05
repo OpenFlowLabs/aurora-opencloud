@@ -1,0 +1,47 @@
+[package]
+name = "opcimage"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "opczone"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opcimgstatechange"
+path = "src/brand/opczimage/bin/statechange.rs"
+
+[[bin]]
+name = "opcimginstall"
+path = "src/brand/opczimage/bin/install.rs"
+
+[[bin]]
+name = "opcimgattach"
+path = "src/brand/opczimage/bin/attach.rs"
+
+[[bin]]
+name = "opcimgdetach"
+path = "src/brand/opczimage/bin/detach.rs"
+
+[[bin]]
+name = "opcimguninstall"
+path = "src/brand/opczimage/bin/uninstall.rs"
+
+[dependencies]
+knuffel = {version="2.0.0", features=["derive"]}
+anyhow = "1.0"
+thiserror = "1.0"
+clap = {version="3.2", features=["derive"]}
+common = {path="../common"}
+zone = {git="https://github.com/oxidecomputer/zone.git"}
+uuid = {version="1.1.2", features=["serde"]}
+serde = {version="1.0", features=["derive"]}
+serde_json = {version="1.0"}
+illumos-image-builder = {git="https://github.com/Toasterson/image-builder.git"}
+
+[dev-dependencies]
+pretty_assertions = {version="*"} 
+miette = { version="4.7.1", features=["fancy"]}
+
