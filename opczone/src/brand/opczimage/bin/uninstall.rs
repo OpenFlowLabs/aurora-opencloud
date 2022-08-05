@@ -1,10 +1,11 @@
-use std::{fs::{copy, remove_dir_all}, path::Path};
+use std::{fs::remove_dir_all};
 
-use anyhow::bail;
+use anyhow::{bail, Result};
 use clap::{Parser};
 use common::{warn, init_slog_logging};
-use illumos_image_builder::{zfs_get, dataset_remove};
+use illumos_image_builder::{dataset_remove};
 use opczone::get_zonepath_parent_ds;
+use std::process::Command;
 
 #[derive(Parser)]
 struct Cli {
@@ -41,7 +42,7 @@ fn main() -> Result<()> {
             if !zfs.status.success() {
                 let errmsg = String::from_utf8_lossy(&zfs.stderr);
                 if errmsg.trim().ends_with("dataset does not exist") {
-                    return Ok(false);
+                    return Ok(());
                 }
                 bail!("zfs destroy failed: {}", errmsg);
             }

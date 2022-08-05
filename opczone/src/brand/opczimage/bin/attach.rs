@@ -1,4 +1,6 @@
 use clap::{Parser};
+use common::{init_slog_logging};
+use anyhow::Result;
 
 #[derive(Parser)]
 struct Cli {

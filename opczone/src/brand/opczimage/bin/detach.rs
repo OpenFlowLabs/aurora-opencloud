@@ -1,6 +1,7 @@
 use std::{fs::copy, path::Path};
-
+use common::{init_slog_logging};
 use clap::{Parser};
+use anyhow::Result;
 
 #[derive(Parser)]
 struct Cli {

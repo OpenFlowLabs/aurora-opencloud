@@ -1,6 +1,7 @@
 
 use std::{path::Path, fs::DirBuilder, os::unix::fs::DirBuilderExt};
 
+use common::{init_slog_logging};
 use anyhow::{Result, Context};
 use clap::{Parser, ArgEnum};
 use opczone::brand::{ZONE_CMD_READY, ZONE_CMD_HALT, ZONE_CMD_BOOT, ZONE_CMD_UNMOUNT};

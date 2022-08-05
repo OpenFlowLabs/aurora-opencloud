@@ -1,6 +1,7 @@
-use std::{path::Path, fs::DirBuilder, os::unix::fs::DirBuilderExt, fmt::format};
+use std::{path::Path, fs::{DirBuilder, File}, os::unix::fs::DirBuilderExt};
 
-use anyhow::{Result, Context, bail};
+use common::{init_slog_logging};
+use anyhow::{Result, Context};
 use clap::{Parser};
 use opczone::get_zonepath_parent_ds;
 use zone::{Config as ZoneConfig, Global};
@@ -37,6 +38,8 @@ fn get_install_config(zonename: &str) -> Result<opczone::Config> {
     let cfg_file = File::open(config_path)?;
 
     let cfg = serde_json::from_reader(cfg_file)?;
+
+    Ok(cfg)
 }
 
 
@@ -58,10 +61,10 @@ fn setup_dataset(zonename: &str, zonepath: &str, zonequota: i32, image: Option<u
     if let Some(image) = image {
         let snapshot = format!("{}/{}@final", parent_dataset, image.as_hyphenated().to_string());
         let quota_opt = format!("quota={}", quota_arg);
-        dataset_clone(&snapshot, &root_dataset_name, true, vec![
-            "devices=off", 
-            &quota_opt,
-        ])?;
+        dataset_clone(&snapshot, &root_dataset_name, true, Some(vec![
+            "devices=off".into(), 
+            quota_opt,
+        ]))?;
     } else {
         dataset_create(&root_dataset_name, false)?;
         zfs_set(&root_dataset_name, "devices", "off")?;

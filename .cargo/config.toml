@@ -1,2 +1,3 @@
-#[build]
+[build]
 #rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#target-dir = "$HOME/opencloud-target"
