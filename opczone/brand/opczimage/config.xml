@@ -39,7 +39,7 @@
 	<user_cmd>/usr/bin/getent passwd %u</user_cmd>
 
 	<install>/usr/lib/brand/opczimage/install -z %z -R %R</install>
-	<installopts>R:t:U:q:z:</installopts>
+	<installopts>R:t:U:q:z:b:</installopts>
 	<boot></boot>
 	<sysboot>/usr/lib/brand/opczimage/statechange pre %z %R 2 0</sysboot>
 	<halt></halt>
@@ -51,7 +51,7 @@
 	<attach>/usr/lib/brand/opczimage/attach %z %R</attach>
 	<detach>/usr/lib/brand/opczimage/detach -z %z -R %R</detach>
 	<clone></clone>
-	<uninstall>/usr/lib/brand/opczimage/uninstall %z %R</uninstall>
+	<uninstall>/usr/lib/brand/opczimage/uninstall -z %z -R %R</uninstall>
 	<prestatechange>/usr/lib/brand/opczimage/statechange pre %z %R</prestatechange>
 	<poststatechange>/usr/lib/brand/opczimage/statechange post %z %R</poststatechange>
 	<query>/usr/lib/brand/shared/query %z %R</query>

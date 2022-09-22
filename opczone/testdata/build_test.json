@@ -1,0 +1,14 @@
+{
+    "brand": "image",
+    "zfs_io_priority": 30,
+    "quota": 20,
+    "max_physical_memory": 1024,
+    "nics": [
+        {
+            "nic_tag": "e1000g0",
+            "ip": "10.0.2.3/24",
+            "gateway": "10.0.2.2",
+            "primary": true
+        }
+    ]
+}

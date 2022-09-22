@@ -1,164 +1,189 @@
 pub mod brand;
-pub mod definition;
-use std::{path::Path, fs::File};
+pub mod build;
+pub mod dladm;
+pub mod image;
+pub mod machine;
+mod util;
+pub mod vmext;
 
-use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
+use anyhow::{bail, Context, Result};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::process::{Command, Stdio};
 
-#[derive(Deserialize, Serialize)]
-pub struct Config {
-    pub image: Option<uuid::Uuid>,
-    pub quota: i32,
+pub use util::*;
+
+use common::*;
+
+fn spawn_reader<T>(name: &str, stream: Option<T>) -> Option<std::thread::JoinHandle<()>>
+where
+    T: Read + Send + 'static,
+{
+    let name = name.to_string();
+    let stream = match stream {
+        Some(stream) => stream,
+        None => return None,
+    };
+
+    Some(std::thread::spawn(move || {
+        let mut r = BufReader::new(stream);
+
+        loop {
+            let mut buf = String::new();
+
+            match r.read_line(&mut buf) {
+                Ok(0) => {
+                    /*
+                     * EOF.
+                     */
+                    return;
+                }
+                Ok(_) => {
+                    let s = buf.trim();
+
+                    if !s.is_empty() {
+                        info!(target: "illumos-rs", "{}| {}", name, s);
+                    }
+                }
+                Err(e) => {
+                    error!(target: "illumos-rs", "failed to read {}: {}", name, e);
+                    std::process::exit(100);
+                }
+            }
+        }
+    }))
 }
 
-/// Gets the parent dataset of the zones zonepath.
-/// Usually this is the zones pool on smartos or
-/// the zones dataset on other illumos distributions
-pub fn get_zonepath_parent_ds(zonepath: &str) -> Result<String> {
-    //+ ZONEPATH=/zones/oflnc
-    //+ dname=/zones
-    //+ bname=oflnc
-    //+ nawk -v p=/zones '{if ($1 == p) print $3}'
-    //+ mount
-    //+ PDS_NAME=rpool/zones
-    let dname = get_parent_dataset_path(zonepath)?;
+fn build_env<S: AsRef<str>>(env: Option<&[(S, S)]>) -> Option<Vec<(&str, &str)>> {
+    if let Some(env) = env {
+        let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (k.as_ref(), v.as_ref())).collect();
+        Some(env)
+    } else {
+        None
+    }
+}
 
-    for mnt in common::illumos::mounts()? {
-        if &mnt.mount_point == dname {
-            return Ok(mnt.special)
-        }
+fn build_cmd(args: Vec<&str>, env: Option<Vec<(&str, &str)>>) -> Command {
+    let mut cmd = Command::new(&args[0]);
+    cmd.env_remove("LANG");
+    cmd.env_remove("LC_CTYPE");
+    cmd.env_remove("LC_NUMERIC");
+    cmd.env_remove("LC_TIME");
+    cmd.env_remove("LC_COLLATE");
+    cmd.env_remove("LC_MONETARY");
+    cmd.env_remove("LC_MESSAGES");
+    cmd.env_remove("LC_ALL");
+
+    if args.len() > 1 {
+        cmd.args(&args[1..]);
     }
 
-    bail!("No dataset found for mountpoint {}", dname)
+    if let Some(env) = env {
+        cmd.envs(env.clone());
+        debug!(target: "opczone", "exec: {:?} env={:?}", &args, &env);
+    } else {
+        debug!(target: "opczone", "exec: {:?}", &args);
+    }
+    cmd
 }
 
-pub fn get_parent_dataset_path(zonepath: &str) ->Result<&str> {
-    let (dname, _) = match common::path_split(zonepath) {
-        Some(v) => v,
-        None => bail!("could not split zonepath {}", zonepath),
-    };
-    Ok(dname)
-}
+pub fn run_with_stdin<S: AsRef<str>>(
+    args: &[S],
+    env: Option<&[(S, S)]>,
+    stdin: String,
+) -> Result<()> {
+    let args: Vec<&str> = args.iter().map(|s| s.as_ref()).collect();
+    let env = build_env(env);
+    let mut cmd = build_cmd(args.clone(), env);
 
-pub fn get_config(zonename: &str, zonepath: &str) -> Result<Config> {
-    let (parent_ds_path, _) = match common::path_split(zonepath) {
-        Some(v) => v,
-        None => bail!("could not split zonepath {}", zonepath),
-    };
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
 
-    let config_path = Path::new(parent_ds_path).join("config").join(format!("{}.json", zonename));
+    let mut child = cmd.spawn().context(format!(
+        "could not spawn process {}",
+        args[0].clone().to_owned()
+    ))?;
+    let mut child_stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        child_stdin.write_all(stdin.as_bytes()).unwrap();
+    });
 
-    let cfg_file = File::open(config_path)?;
+    let readout = spawn_reader("O", child.stdout.take());
+    let readerr = spawn_reader("E", child.stderr.take());
 
-    let cfg = serde_json::from_reader(cfg_file)?;
+    if let Some(t) = readout {
+        t.join().expect("join stdout thread");
+    }
+    if let Some(t) = readerr {
+        t.join().expect("join stderr thread");
+    }
 
-    Ok(cfg)
-}
-
-
-mod tests {
-    #[test]
-    fn it_works() {
-        use crate::definition::{
-            Action, CaCertificates, Document, Ips, IpsPublisher, Mediator, Volume, VolumeProperty,
-        };
-        use crate::definition::{IpsActions, IpsPackageList, IpsProperties};
-
-        use miette::{Context, IntoDiagnostic};
-        use pretty_assertions::assert_eq;
-        use std::collections::HashMap;
-        use std::fs;
-
-        let file = "testdata/image_base.kdl";
-
-        let comparision = Document {
-            author: Some("John Doe <john.doe@example.com>".into()),
-            name: "my-image".into(),
-            version: 1,
-            base_on: Some("img://openindiana.org/hipster".into()),
-            actions: vec![
-                Action::Volume(Volume {
-                    name: "data".into(),
-                    mountpoint: Some("/var/lib/pgdata".into()),
-                    properties: vec![
-                        VolumeProperty {
-                            name: "checksum".into(),
-                            value: "off".into(),
-                            driver_name: "zfs".into(),
-                        },
-                        VolumeProperty {
-                            name: "compression".into(),
-                            value: "lz4".into(),
-                            driver_name: "zfs".into(),
-                        },
-                        VolumeProperty {
-                            name: "copies".into(),
-                            value: "3".into(),
-                            driver_name: "zfs".into(),
-                        },
-                        VolumeProperty {
-                            name: "bar".into(),
-                            value: "1".into(),
-                            driver_name: "foo".into(),
-                        },
-                    ],
-                }),
-                Action::Ips(Ips {
-                    actions: vec![
-                        IpsActions::InstallPackages(IpsPackageList {
-                            packages: vec![
-                                "developer/gcc-11".into(),
-                                "golang".into(),
-                                "golang-118".into(),
-                            ],
-                        }),
-                        IpsActions::UninstallPackages(IpsPackageList {
-                            packages: vec!["userland-incorportation".into()],
-                        }),
-                        IpsActions::InstallOptionals,
-                        IpsActions::SetProperty(IpsProperties {
-                            properties: HashMap::from([("image.prop".into(), "false".into())]),
-                        }),
-                        IpsActions::SetPublisher(IpsPublisher {
-                            publisher: "openindiana.org".into(),
-                            uris: vec!["https://pkg.openindiana.org/hipster".into()],
-                        }),
-                        IpsActions::ApprovePublisherCA(CaCertificates {
-                            publisher: "openindiana.org".into(),
-                            cert_file: "/path/to/cert/in/image/bundle".into(),
-                        }),
-                        IpsActions::SetVariant(IpsProperties {
-                            properties: HashMap::from([(
-                                "opensolaris.zone".into(),
-                                "global".into(),
-                            )]),
-                        }),
-                        IpsActions::SetFacet(IpsProperties {
-                            properties: HashMap::from([("my.facet.name".into(), "true".into())]),
-                        }),
-                        IpsActions::SetMediator(Mediator {
-                            name: "mysql".into(),
-                            implementation: Some("mariadb".into()),
-                            version: None,
-                        }),
-                        IpsActions::PurgeHistory,
-                    ],
-                }),
-            ],
-        };
-
-        let text = fs::read_to_string(file)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("cannot read {:?}", file))
-            .unwrap();
-
-        let config = match knuffel::parse::<Document>(file, &text) {
-            Ok(config) => config,
-            Err(e) => {
-                panic!("{:?}", miette::Report::new(e));
+    match child.wait() {
+        Err(e) => Err(e.into()),
+        Ok(es) => {
+            if !es.success() {
+                bail!("exec {:?}: failed {:?}", &args, &es)
+            } else {
+                Ok(())
             }
-        };
+        }
+    }
+}
 
-        assert_eq!(comparision, config);
+pub fn run<S: AsRef<str>>(args: &[S], env: Option<&[(S, S)]>) -> Result<()> {
+    let args: Vec<&str> = args.iter().map(|s| s.as_ref()).collect();
+    let env = build_env(env);
+    let mut cmd = build_cmd(args.clone(), env);
+
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd
+        .spawn()
+        .context(format!("could not spawn process {}", args[0]))?;
+
+    let readout = spawn_reader("O", child.stdout.take());
+    let readerr = spawn_reader("E", child.stderr.take());
+
+    if let Some(t) = readout {
+        t.join().expect("join stdout thread");
+    }
+    if let Some(t) = readerr {
+        t.join().expect("join stderr thread");
+    }
+
+    match child.wait() {
+        Err(e) => Err(e.into()),
+        Ok(es) => {
+            if !es.success() {
+                bail!("exec {:?}: failed {:?}", &args, &es)
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+pub fn run_capture_stdout<S: AsRef<str>>(args: &[S], env: Option<&[(S, S)]>) -> Result<String> {
+    let args: Vec<&str> = args.iter().map(|s| s.as_ref()).collect();
+    let env = build_env(env);
+    let mut cmd = build_cmd(args.clone(), env);
+
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let output = cmd
+        .output()
+        .context(format!("could not spawn process {}", args[0]))?;
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout)?)
+    } else {
+        bail!(
+            "exec {:?}: failed {:?}",
+            &args,
+            String::from_utf8(output.stderr)?
+        )
     }
 }

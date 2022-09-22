@@ -1,5 +1,5 @@
 [package]
-name = "opcimage"
+name = "opczone"
 version = "0.1.0"
 edition = "2021"
 
@@ -29,6 +29,10 @@ path = "src/brand/opczimage/bin/detach.rs"
 name = "opcimguninstall"
 path = "src/brand/opczimage/bin/uninstall.rs"
 
+[[bin]]
+name = "opcimgbuild"
+path = "src/brand/opczimage/bin/build.rs"
+
 [dependencies]
 knuffel = {version="2.0.0", features=["derive"]}
 anyhow = "1.0"
@@ -36,12 +40,15 @@ thiserror = "1.0"
 clap = {version="3.2", features=["derive"]}
 common = {path="../common"}
 zone = {git="https://github.com/oxidecomputer/zone.git"}
-uuid = {version="1.1.2", features=["serde"]}
+uuid = {version="1.1.2", features=["serde", "v4"]}
 serde = {version="1.0", features=["derive"]}
 serde_json = {version="1.0"}
 illumos-image-builder = {git="https://github.com/Toasterson/image-builder.git"}
+rand = "0.8.5"
+url = "2.2.2"
+fs_extra = "1.2.0"
+miette = { version="4.7.1", features=["fancy"]}
 
 [dev-dependencies]
 pretty_assertions = {version="*"} 
-miette = { version="4.7.1", features=["fancy"]}
 

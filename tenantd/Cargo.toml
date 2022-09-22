@@ -11,10 +11,10 @@ common = { path = "../common" }
 tonic = "0.7"
 prost = "0.10"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-diesel = { version = "1.4",  default-features=true, features = ["uuid", "uuidv07", "r2d2", "postgres", "chrono", "serde_json"] }
+diesel = { version = "1.4.8",  default-features=true, features = ["uuidv07", "r2d2", "postgres", "chrono", "serde_json"] }
 diesel_migrations = "1.4"
 dotenv = "0.15.0"
-uuid = { version = "0.7.4", features = ["v4", "serde"] }
+uuid = { version = "0.8.2", features = ["v4", "serde"] }
 log = "0.4"
 chrono = "0.4.19"
 pwhash = "1.0.0"

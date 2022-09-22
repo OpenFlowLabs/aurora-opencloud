@@ -1,14 +1,14 @@
-use std::{fs::copy, path::Path};
-use common::{init_slog_logging};
-use clap::{Parser};
 use anyhow::Result;
+use clap::Parser;
+use common::init_slog_logging;
+use std::{fs::copy, path::Path};
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short='z')]
+    #[clap(short = 'z')]
     zonename: String,
 
-    #[clap(short='R')]
+    #[clap(short = 'R')]
     zonepath: String,
 }
 
@@ -19,8 +19,8 @@ fn main() -> Result<()> {
 
     // cp /etc/zones/${ZONENAME}.xml ${ZONEPATH}/SUNWdetached.xml
     copy(
-        Path::new("/etc/zones").join(format!("{}.xml", &cli.zonename)), 
-        Path::new(&cli.zonepath).join("SUNWdetached.xml")
+        Path::new("/etc/zones").join(format!("{}.xml", &cli.zonename)),
+        Path::new(&cli.zonepath).join("SUNWdetached.xml"),
     )?;
 
     Ok(())

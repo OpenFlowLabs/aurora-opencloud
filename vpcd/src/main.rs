@@ -1,42 +1,53 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
-mod vpc;
 mod database;
+mod vpc;
 
-use common::*;
 use clap::{Parser, Subcommand};
-use diesel::{r2d2::{ConnectionManager, Pool}, PgConnection};
-use dotenv::{dotenv};
-use vpc::vpc_server::{Vpc};
-use tonic::{transport::Server, Request, Response, Status};
+use common::*;
 use database::PGPool;
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    PgConnection,
+};
+use dotenv::dotenv;
+use tonic::{transport::Server, Request, Response, Status};
+use vpc::vpc_server::Vpc;
 
 use crate::vpc::vpc_server::VpcServer;
 
 pub struct VPCSvc {
+    #[allow(dead_code)]
     pool: PGPool,
 }
 
 #[tonic::async_trait]
 impl Vpc for VPCSvc {
-    async fn list_vpcs(&self, request: Request<vpc::ListVpcRequest>) -> Result<Response<vpc::ListVpcResponse>, Status> {
+    async fn list_vpcs(
+        &self,
+        _request: Request<vpc::ListVpcRequest>,
+    ) -> Result<Response<vpc::ListVpcResponse>, Status> {
         Err(Status::aborted("unimplemented"))
     }
 
-    async fn create_vpc(&self, request: Request<vpc::CreateVpcRequest>) -> Result<Response<vpc::StatusResponse>, Status> {
+    async fn create_vpc(
+        &self,
+        _request: Request<vpc::CreateVpcRequest>,
+    ) -> Result<Response<vpc::StatusResponse>, Status> {
         Err(Status::aborted("unimplemented"))
     }
 
-    async fn get_vpc(&self, request: Request<vpc::GetVpcRequest>) -> Result<Response<vpc::VpcSchema>, Status> {
+    async fn get_vpc(
+        &self,
+        _request: Request<vpc::GetVpcRequest>,
+    ) -> Result<Response<vpc::VpcSchema>, Status> {
         Err(Status::aborted("unimplemented"))
     }
 }
 
 impl VPCSvc {
     pub fn new(pool: PGPool) -> Result<Self> {
-        Ok(VPCSvc {
-            pool,
-        })
+        Ok(VPCSvc { pool })
     }
 }
 
@@ -62,18 +73,12 @@ enum CliCommands {
     },
 }
 
-async fn serve(
-    listen: &str,
-    port: &str,
-    database_url: &str,
-) -> Result<()> {
+async fn serve(listen: &str, port: &str, database_url: &str) -> Result<()> {
     let addr: SocketAddr = format!("{}:{}", listen, port).parse()?;
 
     let pool = build_database_connection(database_url)?;
 
-    let vpc_service = VPCSvc::new(
-        pool,
-    )?;
+    let vpc_service = VPCSvc::new(pool)?;
 
     info!("Starting Tenant Service");
     Server::builder()
@@ -106,8 +111,6 @@ async fn main() -> Result<()> {
     };
 
     match cli.command {
-        CliCommands::Serve { listen, port } => {
-            serve(&listen, &port, &database_url).await
-        },
+        CliCommands::Serve { listen, port } => serve(&listen, &port, &database_url).await,
     }
 }

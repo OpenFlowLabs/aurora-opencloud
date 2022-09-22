@@ -1,0 +1,56 @@
+
+[env.development]
+CARGO_BUILD_TYPE = "debug"
+
+[env.production]
+CARGO_BUILD_TYPE = "release"
+
+[tasks.install_env.env]
+"INSTALL" = "/usr/bin/ginstall" # For some reason cargo make does not detect the illumos platform properly thus make it the detault
+"proto_dir" = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/prototype"
+"brand_dir" = "${proto_dir}/usr/lib/brand"
+"usr_bin" = "${proto_dir}/usr/bin"
+"manifest_dir" = "${proto_dir}/lib/svc/manifest"
+"build_dir" = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/${CARGO_BUILD_TYPE}"
+
+[tasks.tarball]
+dependencies = ["install"]
+script_runner = "bash"
+script_extension = "bash"
+script_runner_args = ["-ex"]
+script = '''
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/prototype
+tar -czf ../opencloud-full.tar.gz *
+'''
+
+[tasks.package]
+clear = true
+dependencies = ["install"]
+script_runner = "bash"
+script_extension = "bash"
+script_runner_args = ["-ex"]
+script = '''
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
+rm -rf manifests ${REPO_NAME} repository ${COMPONENT_NAME}.p5p
+mkdir manifests
+pkgsend generate prototype | pkgfmt > manifests/${COMPONENT_NAME}.p5m.1
+pkgmogrify \
+    -DCOMPONENT_NAME="${COMPONENT_NAME}" \
+    -DCOMPONENT_FMRI="${COMPONENT_FMRI}" \
+    -DIPS_COMPONENT_VERSION="${IPS_COMPONENT_VERSION}" \
+    -DBUILD_VERSION="${BUILD_VERSION}" \
+    -DCOMPONENT_SUMMARY="${COMPONENT_SUMMARY}" \
+    -DCOMPONENT_CLASSIFICATION="${COMPONENT_CLASSIFICATION}" \
+    -DCOMPONENT_PROJECT_URL="${COMPONENT_PROJECT_URL}" \
+    -DCONSOLIDATION="${CONSOLIDATION}" \
+    -DCOMPONENT_LICENSE_FILE="${COMPONENT_LICENSE_FILE}" \
+    -DCOMPONENT_LICENSE="${COMPONENT_LICENSE}" \
+    manifests/${COMPONENT_NAME}.p5m.1 ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/pkg/${COMPONENT_NAME}.mog | pkgfmt > manifests/${COMPONENT_NAME}.p5m.2
+pkgdepend generate -m -d prototype manifests/${COMPONENT_NAME}.p5m.2 | pkgfmt > manifests/${COMPONENT_NAME}.p5m.3
+pkgdepend resolve -m manifests/${COMPONENT_NAME}.p5m.3
+pkglint manifests/${COMPONENT_NAME}.p5m.3.res
+pkgrepo create ${REPO_NAME}
+pkgrepo -s ${REPO_NAME} set publisher/prefix=aurora-opencloud.org
+pkgsend -s ${REPO_NAME} publish -d prototype -d ${CARGO_MAKE_WORKING_DIRECTORY} -d ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY} manifests/${COMPONENT_NAME}.p5m.3.res
+pkgrecv -s ${REPO_NAME} -a -d ${COMPONENT_NAME}.p5p ${COMPONENT_FMRI}
+'''

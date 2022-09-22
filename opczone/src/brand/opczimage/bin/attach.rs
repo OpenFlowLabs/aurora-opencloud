@@ -1,13 +1,13 @@
-use clap::{Parser};
-use common::{init_slog_logging};
 use anyhow::Result;
+use clap::Parser;
+use common::init_slog_logging;
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short='z')]
+    #[clap(short = 'z')]
     zonename: String,
 
-    #[clap(short='R')]
+    #[clap(short = 'R')]
     zonepath: String,
 }
 

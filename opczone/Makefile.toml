@@ -1,0 +1,35 @@
+ 
+extend = "../build/shared_makefile.toml"
+
+[tasks.package.env]
+"COMPONENT_NAME" = "opczone"
+"COMPONENT_FMRI" = "system/zones/brand/${COMPONENT_NAME}"
+"IPS_COMPONENT_VERSION" = "0.5.11"
+"BUILD_VERSION" = "${IPS_COMPONENT_VERSION}-2022.0.1.0"
+"COMPONENT_SUMMARY" = "The Brand support scripts for OpenCloud zones"
+"COMPONENT_CLASSIFICATION" = "org.opensolaris.category.2008:System/Packaging"
+"COMPONENT_PROJECT_URL" = "https://openindiana.org"
+"CONSOLIDATION" = "opencloud"
+"COMPONENT_LICENSE_FILE" = "LICENSE"
+"COMPONENT_LICENSE" = "MPL v2.0"
+"REPO_NAME" = "repository"
+
+[tasks.install]
+extend = "install_env"
+dependencies = ["build"]
+script_runner = "bash"
+script_extension = "bash"
+script_runner_args = ["-ex"]
+script = '''
+cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
+mkdir -p ${proto_dir}
+mkdir -p ${brand_dir}/opczimage
+${INSTALL} -D -m 755 ${build_dir}/opcimginstall ${brand_dir}/opczimage/install
+${INSTALL} -D -m 755 ${build_dir}/opcimguninstall ${brand_dir}/opczimage/uninstall
+${INSTALL} -D -m 755 ${build_dir}/opcimgstatechange ${brand_dir}/opczimage/statechange
+${INSTALL} -D -m 755 ${build_dir}/opcimgattach ${brand_dir}/opczimage/attach
+${INSTALL} -D -m 755 ${build_dir}/opcimgdetach ${brand_dir}/opczimage/detach
+${INSTALL} -D -m 755 ${build_dir}/opcimgbuild ${brand_dir}/opczimage/build_runner
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/config.xml ${brand_dir}/opczimage/config.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/platform.xml ${brand_dir}/opczimage/platform.xml
+'''

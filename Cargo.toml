@@ -5,8 +5,9 @@ members = [
   "cloudadm",
   "tenantd",
   "vpcd",
-  "nodeadm",
   "nodeadmd",
+  "vmadm",
+  "imgadm",
   "opczone",
   "common",
   "osshkeys"

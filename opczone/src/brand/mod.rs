@@ -28,4 +28,3 @@ impl ZoneSubProcExitCode {
     pub const ZONE_SUBPROC_NOTCOMPLETE: ZoneSubProcExitCode = ZoneSubProcExitCode(254);
     pub const ZONE_SUBPROC_FATAL: ZoneSubProcExitCode = ZoneSubProcExitCode(255);
 }
-
