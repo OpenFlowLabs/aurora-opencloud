@@ -23,6 +23,8 @@ jobs:
           toolchain: stable
           default: true
           components: rustfmt, clippy
+    - name: Remove cargo config
+      run: rm -rf .cargo
     - name: Check
       uses: actions-rs/cargo@v1
       with:
