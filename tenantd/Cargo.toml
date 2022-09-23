@@ -20,7 +20,7 @@ chrono = "0.4.19"
 pwhash = "1.0.0"
 rand = "0.8.5"
 pasetors = {version = "0.5.0", features = ["paserk"]}
-osshkeys = { git="https://github.com/Leo1003/rust-osshkeys.git" }
+osshkeys = { version = "0.6.2" }
 openssl = "0.10"
 serde_json = "1.0"
 anyhow = "1"
