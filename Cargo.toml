@@ -9,6 +9,5 @@ members = [
   "vmadm",
   "imgadm",
   "opczone",
-  "common",
-  "osshkeys"
+  "common"
 ]

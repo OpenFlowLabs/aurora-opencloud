@@ -11,7 +11,7 @@ tonic = "0.7"
 prost = "0.10"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 pasetors = {version = "0.5.0", features = ["paserk"]}
-osshkeys = {version = "0.6.1", path = "../osshkeys"}
+osshkeys = { git="https://github.com/Leo1003/rust-osshkeys.git" }
 openssl = "0.10"
 serde = { version = "1", features=["derive"] }
 serde_yaml = "0.8"
