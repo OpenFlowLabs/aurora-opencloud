@@ -1,10 +1,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use common::init_slog_logging;
-use fs_extra::{copy_items, dir::CopyOptions};
 use illumos_image_builder::{dataset_clone, dataset_create, zfs_set};
 use opczone::{
-    build::{bundle::{Bundle, BUILD_BUNDLE_IMAGE_PATH}, run_action},
+    build::{bundle::{Bundle}, run_action},
     get_zonepath_parent_ds,
     vmext::get_brand_config,
 };
@@ -38,7 +37,7 @@ fn main() -> Result<()> {
 
     let cli: Cli = Cli::parse();
 
-    let cfg = get_brand_config(&cli.zonename)?;
+    let _cfg = get_brand_config(&cli.zonename)?;
 
     if cli.image_uuid.is_some() && cli.build_bundle.is_some() {
         bail!("can only either deploy an image production by setting and image or build an image by setting build bundle. Both are set, bailing")
@@ -52,8 +51,6 @@ fn main() -> Result<()> {
         cli.build_bundle.clone(),
     )?;
 
-    setup_zone_fs(&cli.zonename, &cli.zonepath)?;
-
     if let Some(build_bundle) = cli.build_bundle {
         let bundle = Bundle::new(&build_bundle).map_err(|err| anyhow!("{:?}", err))?;
         let bundle_audit = bundle.get_audit_info();
@@ -61,14 +58,18 @@ fn main() -> Result<()> {
             bail!("Bundle is not safe to run in gz: Either this bundle must be based on another image or it's first action must be an ips action.")
         }
 
+        let zone_root = format!("{}/root", cli.zonepath);
+
         //Run first IPS action to install image base
         if let Some(ips_action) = bundle.document.actions.first() {
-            run_action(&cli.zonepath, ips_action.clone())?;
+            run_action(&zone_root, ips_action.clone())?;
         }
 
         //Save image bundle inside the image with first IPS action removed
-        bundle.save_to_zone(&cli.zonepath)?;
+        bundle.save_to_zone(&zone_root)?;
     }
+
+    setup_zone_fs(&cli.zonename, &cli.zonepath)?;
 
     Ok(())
 }
@@ -111,6 +112,7 @@ fn setup_dataset(
             zfs_set(&root_dataset_name, "quota", &quota_arg)?;
         } else {
             //TODO: clone base image
+            todo!()
         }
     } else {
         bail!("neither image uuid or build bundle specified this would create an empty (unusable) zone")

@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use common::init_slog_logging;
-use opczone::{build::{add_build_config, Bundle}, machine::define_vm};
+use opczone::{build::bundle::Bundle, machine::define_vm};
 use std::io::stdin;
 use url::Url;
 

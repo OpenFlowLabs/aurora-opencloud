@@ -48,6 +48,7 @@ rand = "0.8.5"
 url = "2.2.2"
 fs_extra = "1.2.0"
 miette = { version="4.7.1", features=["fancy"]}
+log = "0.4"
 
 [dev-dependencies]
 pretty_assertions = {version="*"} 

@@ -225,7 +225,11 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
             Ok(())
         },
         IpsActions::SetPublisher(pub_props) => {
-            let mut args = vec!["-R".to_owned(), root.to_string()];
+            let mut args = vec![
+                "-R".to_owned(), 
+                root.to_string(),
+                "set-publisher".to_owned(),
+                ];
             for (idx, uri) in pub_props.uris.into_iter().enumerate() {
                 if idx == 0 {
                     args.push("-O".to_owned());
@@ -275,7 +279,11 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
             ])
         },
         IpsActions::SetMediator(mediator_props) => {
-            let mut args = vec!["-R".to_owned(), root.to_string()];
+            let mut args = vec![
+                "-R".to_owned(), 
+                root.to_string(),
+                "set-mediator".to_owned(),    
+            ];
             if let Some(imple) = mediator_props.implementation {
                 args.push("-I".to_owned());
                 args.push(imple);

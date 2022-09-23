@@ -16,7 +16,7 @@ pub enum BundleError {
     IoError(#[from] std::io::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum BuildBundleType {
     BaseImage,
     Image,
@@ -38,7 +38,10 @@ impl BuildBundleAuditInfo {
     }
 
     pub fn is_base_image(&self) -> bool {
-        matches!(self.bundle_type, BuildBundleType::BaseImage)
+        if self.bundle_type == BuildBundleType::BaseImage {
+            return true;
+        }
+        false
     }
 }
 
@@ -83,7 +86,7 @@ impl Bundle {
     }
 
     pub fn get_audit_info(&self) -> BuildBundleAuditInfo {
-        let t = if self.document.base_on.is_some()
+        let t = if self.document.base_on.is_none()
             && matches!(self.document.actions[0], Action::Ips(..))
         {
             BuildBundleType::BaseImage
@@ -96,12 +99,9 @@ impl Bundle {
 
     pub fn save_to<P: AsRef<Path>>(&self, target: P) -> Result<()> {
         let options = fs_extra::dir::CopyOptions{ 
-            overwrite: true, 
-            skip_exist: false, 
-            buffer_size: 64000, 
-            copy_inside: true, 
-            content_only: true, 
-            depth: 0,
+            overwrite: true,
+            copy_inside: true,
+            ..Default::default()
         };
         fs_extra::copy_items(&[&self.source_path], target, &options)?;
 

@@ -1477,6 +1477,7 @@ dependencies = [
  "fs_extra",
  "illumos-image-builder",
  "knuffel",
+ "log",
  "miette",
  "pretty_assertions",
  "rand 0.8.5",
