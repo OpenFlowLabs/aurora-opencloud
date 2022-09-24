@@ -105,6 +105,9 @@ impl Bundle {
         };
         fs_extra::copy_items(&[&self.source_path], target, &options)?;
 
+        //TODO: Save progress information on disk
+        //TODO: Switch source path to target
+
         Ok(())
     }
 

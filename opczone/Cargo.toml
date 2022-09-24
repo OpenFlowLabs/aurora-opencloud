@@ -33,6 +33,10 @@ path = "src/brand/opczimage/bin/uninstall.rs"
 name = "opcimgbuild"
 path = "src/brand/opczimage/bin/build.rs"
 
+[[bin]]
+name = "opcimgquery"
+path = "src/brand/opczimage/bin/query.rs"
+
 [dependencies]
 knuffel = {version="2.0.0", features=["derive"]}
 anyhow = "1.0"

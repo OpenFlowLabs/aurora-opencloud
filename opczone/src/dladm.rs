@@ -1,5 +1,6 @@
 use crate::{run, run_capture_stdout};
 use anyhow::Result;
+use common::{info, debug};
 
 const DLADM_BIN: &str = "/usr/sbin/dladm";
 
@@ -14,8 +15,8 @@ pub enum LinkKind {
 pub struct LinkInfo {
     pub class: LinkKind,
     pub name: String,
-    pub mtu: String,
-    pub state: String,
+    //pub mtu: String,
+    //pub state: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -65,14 +66,15 @@ pub fn show_vnic() -> Result<Vec<VnicInfo>> {
     Ok(stdout
         .lines()
         .map(|l| {
-            let line: Vec<&str> = l.split(";").collect();
+            let line = l.clone().to_owned().replace("\\:", ";");
+            let line: Vec<&str> = line.split(":").collect();
             if line.len() < 4 {
                 panic!("not enough output from dladm show-phys line: got {}", l);
             }
             VnicInfo {
                 name: line[0].to_owned(),
                 over: line[1].to_owned(),
-                mac: line[2].to_owned().replace("\\:", ":"),
+                mac: line[2].to_owned().replace(";", ":"),
                 mac_type: line[3].to_owned(),
             }
         })
@@ -92,14 +94,15 @@ pub fn show_one_vnic(name: &str) -> Result<VnicInfo> {
     let infos: Vec<VnicInfo> = stdout
         .lines()
         .map(|l| {
-            let line: Vec<&str> = l.split(";").collect();
+            let line = l.clone().to_owned().replace("\\:", ";");
+            let line: Vec<&str> = line.split(":").collect();
             if line.len() < 4 {
                 panic!("not enough output from dladm show-phys line: got {}", l);
             }
             VnicInfo {
                 name: line[0].to_owned(),
                 over: line[1].to_owned(),
-                mac: line[2].to_owned().replace("\\:", ":"),
+                mac: line[2].to_owned().replace(";", ":"),
                 mac_type: line[3].to_owned(),
             }
         })
@@ -139,7 +142,7 @@ fn show(class: &str) -> Result<Vec<LinkInfo>> {
         &format!("show-{}", class),
         "-p",
         "-o",
-        "LINK,MTU,STATE",
+        "LINK", //TODO: Figure out why MTU does not work on illumos but exists on SmartOS
     ];
     let stdout = run_capture_stdout(&dladm_args, None)?;
     Ok(stdout
@@ -156,29 +159,28 @@ fn show(class: &str) -> Result<Vec<LinkInfo>> {
                     x
                 ),
             };
-            let line: Vec<&str> = l.split(";").collect();
-            if line.len() < 4 {
+            let line: Vec<&str> = l.split(":").collect();
+            if line.len() < 1 {
                 panic!("not enough output from dladm show-phys line: got {}", l);
             }
             LinkInfo {
                 class: class,
-                name: line[0].to_owned(),
-                mtu: line[1].to_owned(),
-                state: line[2].to_owned(),
+                name: line[0].to_owned()
             }
         })
         .collect())
 }
 
+#[derive(Debug)]
 pub enum CreateVNICArgs {
     Vrrp(u8),
     Mac(String),
     Vlan(i32),
     Temporary,
     Link(String),
-    Primary,
 }
 
+#[derive(Debug)]
 pub enum CreateVNICProps {
     Mtu(i32),
     Zone(String),
@@ -189,6 +191,7 @@ pub fn create_vnic(
     args: Option<Vec<CreateVNICArgs>>,
     opts: Option<Vec<CreateVNICProps>>,
 ) -> Result<()> {
+    debug!("Calling dladm with args: {:#?} and options {:#?}", &args, &opts);
     let mut dladm_args: Vec<String> = vec![DLADM_BIN.to_owned(), "create-vnic".to_owned()];
     if let Some(opts) = opts {
         dladm_args.push("-p".to_owned());
@@ -231,9 +234,6 @@ pub fn create_vnic(
                 CreateVNICArgs::Link(link) => {
                     dladm_args.push("-l".to_owned());
                     dladm_args.push(link);
-                }
-                CreateVNICArgs::Primary => {
-                    dladm_args.push("-p".to_owned());
                 }
             }
         }

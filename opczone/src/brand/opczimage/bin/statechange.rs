@@ -2,12 +2,12 @@ use std::{fs::DirBuilder, os::unix::fs::DirBuilderExt, path::Path};
 
 use anyhow::{bail, Context, Result};
 use clap::{ArgEnum, Parser};
-use common::init_slog_logging;
+use common::{init_slog_logging, info, debug};
 use opczone::{
     brand::{ZONE_CMD_BOOT, ZONE_CMD_HALT, ZONE_CMD_READY, ZONE_CMD_UNMOUNT, ZONE_STATE_DOWN},
     dladm::{
         create_vnic, does_aggr_exist, does_etherstub_exist, does_phys_exist, show_one_vnic,
-        show_vnic, CreateVNICArgs, CreateVNICProps,
+        show_vnic, CreateVNICArgs, CreateVNICProps, does_vnic_exist,
     },
     machine::{OnDiskNicPayload, OnDiskPayload},
     vmext::{get_brand_config, write_brand_config},
@@ -57,10 +57,13 @@ fn main() -> Result<()> {
             match cli.statecommand {
                 ZONE_CMD_READY => {
                     //pre-ready
+                    info!("Pre-ready");
                     setup_zone_control_dir(&cli.zonename, &cli.zonepath)?;
+                    cfg = setup_net(&cli.zonename, &cli.zonepath, &cfg)?;
                 }
                 ZONE_CMD_HALT => {
                     //pre-halt
+                    info!("Pre-halt");
                     cleanup_net(&cli.zonename, &cli.zonepath, &cfg)?;
                 }
                 _ => {}
@@ -69,7 +72,7 @@ fn main() -> Result<()> {
         StateSubCMD::Post => match cli.statecommand {
             ZONE_CMD_READY => {
                 //post-ready
-                cfg = setup_net(&cli.zonename, &cli.zonepath, &cfg)?;
+                info!("Post-ready");
                 //setup_fw(&cli.zonename, &cli.zonepath, &cfg)?;
             }
             ZONE_CMD_BOOT => {
@@ -123,71 +126,72 @@ fn setup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<OnD
         # device, and then if not, check the other cases.
         #
         */
+        debug!("Checking for backing interface {}", &nic.nic_tag);
         if !does_phys_exist(&nic.nic_tag)
-            || !does_aggr_exist(&nic.nic_tag)
-            || !does_etherstub_exist(&nic.nic_tag)
+            //|| !does_aggr_exist(&nic.nic_tag)
+            //|| !does_etherstub_exist(&nic.nic_tag)
         {
             //TODO: Overlay handling here
             bail!(StateChangeError::NoBackingInterface(nic.nic_tag))
         }
 
-        // Build the vnic args
-        let mut nic_args: Vec<CreateVNICArgs> = vec![
-            CreateVNICArgs::Temporary,
-            CreateVNICArgs::Link(nic.nic_tag.clone()),
-        ];
-        let mut nic_opts: Vec<CreateVNICProps> = vec![
-            CreateVNICProps::Zone(zonename.clone().to_owned()),
-            CreateVNICProps::Mtu(DEFAULT_MTU),
-        ];
+        debug!("Checking if VNIC {} already exists", &nic.interface);
+        if !does_vnic_exist(&nic.interface) {
+            debug!("Building dladm command");
+            // Build the vnic args
+            let mut nic_args: Vec<CreateVNICArgs> = vec![
+                CreateVNICArgs::Temporary,
+                CreateVNICArgs::Link(nic.nic_tag.clone()),
+            ];
+            let mut nic_opts: Vec<CreateVNICProps> = vec![
+                CreateVNICProps::Zone(zonename.clone().to_owned()),
+                CreateVNICProps::Mtu(DEFAULT_MTU),
+            ];
 
-        if nic.primary {
-            nic_args.push(CreateVNICArgs::Primary);
+            if let Some(vrid) = nic.vrrp_vrid {
+                nic_args.push(CreateVNICArgs::Vrrp(vrid));
+            }
+
+            if let Some(mac_addr) = nic.mac.clone() {
+                nic_args.push(CreateVNICArgs::Mac(mac_addr));
+            }
+
+            if let Some(vlan_id) = nic.vlan_id {
+                nic_args.push(CreateVNICArgs::Vlan(vlan_id));
+            }
+
+            create_vnic(&nic.interface, Some(nic_args), Some(nic_opts))?;
+            debug!("VNIC created");
+            //If mac address is empty get it from the newly created nic and save it into the config
+            if nic.mac.is_none() {
+                let info = show_one_vnic(&nic.interface)?;
+                nic.mac = Some(info.mac)
+            }
+
+            //TODO: Setup protection linkprop
+
+            //TODO: set allowed-ips
+
+            //TODO: set dynamic-methods (needs upstream from illumos-joyent first)
+
+            //TODO: set allowed-dhcp-cids
+
+            //TODO: set promisc-filtered
+
+            //TODO: Setup flowadm (block ports that should not go to the outside world)
+            /*
+                mac_addr=`dladm show-vnic -p \
+                        -o MACADDRESS $nic | tr ':' '_'`
+                MACADDR that has : replaced with _ becomes flowname
+                flowadm add-flow -t -l $nic \
+                        -a transport=tcp,remote_port=$port \
+                        -p maxbw=0 f${mac_addr}_br_${port}
+            */
+
+            //TODO: Setup vnd device once illumos-gate gets support for that
+
+            new_payload.nics[idx] = nic;
         }
-
-        if let Some(vrid) = nic.vrrp_vrid {
-            nic_args.push(CreateVNICArgs::Vrrp(vrid));
-        }
-
-        if let Some(mac_addr) = nic.mac.clone() {
-            nic_args.push(CreateVNICArgs::Mac(mac_addr));
-        }
-
-        if let Some(vlan_id) = nic.vlan_id {
-            nic_args.push(CreateVNICArgs::Vlan(vlan_id));
-        }
-
-        create_vnic(&nic.interface, Some(nic_args), Some(nic_opts))?;
-
-        //If mac address is empty get it from the newly created nic and save it into the config
-        if nic.mac.is_none() {
-            let info = show_one_vnic(&nic.interface)?;
-            nic.mac = Some(info.mac)
-        }
-
-        //TODO: Setup protection linkprop
-
-        //TODO: set allowed-ips
-
-        //TODO: set dynamic-methods (needs upstream from illumos-joyent first)
-
-        //TODO: set allowed-dhcp-cids
-
-        //TODO: set promisc-filtered
-
-        //TODO: Setup flowadm (block ports that should not go to the outside world)
-        /*
-            mac_addr=`dladm show-vnic -p \
-                    -o MACADDRESS $nic | tr ':' '_'`
-            MACADDR that has : replaced with _ becomes flowname
-            flowadm add-flow -t -l $nic \
-                    -a transport=tcp,remote_port=$port \
-                    -p maxbw=0 f${mac_addr}_br_${port}
-        */
-
-        //TODO: Setup vnd device once illumos-gate gets support for that
-
-        new_payload.nics[idx] = nic;
     }
     Ok(new_payload)
 }

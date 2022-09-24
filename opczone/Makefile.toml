@@ -29,6 +29,7 @@ ${INSTALL} -D -m 755 ${build_dir}/opcimguninstall ${brand_dir}/opczimage/uninsta
 ${INSTALL} -D -m 755 ${build_dir}/opcimgstatechange ${brand_dir}/opczimage/statechange
 ${INSTALL} -D -m 755 ${build_dir}/opcimgattach ${brand_dir}/opczimage/attach
 ${INSTALL} -D -m 755 ${build_dir}/opcimgdetach ${brand_dir}/opczimage/detach
+${INSTALL} -D -m 755 ${build_dir}/opcimgquery ${brand_dir}/opczimage/query
 ${INSTALL} -D -m 755 ${build_dir}/opcimgbuild ${brand_dir}/opczimage/build_runner
 ${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/config.xml ${brand_dir}/opczimage/config.xml
 ${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/platform.xml ${brand_dir}/opczimage/platform.xml

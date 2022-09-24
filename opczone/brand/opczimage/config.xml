@@ -54,7 +54,7 @@
 	<uninstall>/usr/lib/brand/opczimage/uninstall -z %z -R %R</uninstall>
 	<prestatechange>/usr/lib/brand/opczimage/statechange pre %z %R</prestatechange>
 	<poststatechange>/usr/lib/brand/opczimage/statechange post %z %R</poststatechange>
-	<query>/usr/lib/brand/shared/query %z %R</query>
+	<query>/usr/lib/brand/opczimage/query %z %R</query>
 
 	<privilege set="default" name="contract_event" />
 	<privilege set="default" name="contract_identity" />
