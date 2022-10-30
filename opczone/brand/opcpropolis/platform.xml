@@ -30,18 +30,13 @@
 <!DOCTYPE platform PUBLIC "-//Sun Microsystems Inc//Zones Platform//EN"
     "file:///usr/share/lib/xml/dtd/zone_platform.dtd.1">
 
-<platform name="opczimage" allow-exclusive-ip="true">
+<platform name="opcpropolis" allow-exclusive-ip="true">
 
         <!-- Global filesystems to mount when booting the zone -->
         <global_mount special="/dev" directory="/dev" type="dev"
             opt="attrdir=%R/root/dev"/>
 
         <global_mount special="/var/zonecontrol/%z" directory="/.zonecontrol"
-	        opt="ro,nodevices,nosetuid,noexec" type="lofs" />
-
-        <!-- This mounts the zones metadata directory into the zone allowing the zone to place image relevant metadata 
-        into a place where our scripts can package them into a image with metadata-->
-        <global_mount special="/zones/%z/meta" directory="/.zonemeta"
 	        opt="ro,nodevices,nosetuid,noexec" type="lofs" />
 
         <!-- Local filesystems to mount when booting the zone -->

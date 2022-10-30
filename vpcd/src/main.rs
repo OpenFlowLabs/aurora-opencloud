@@ -100,7 +100,7 @@ fn build_database_connection(database_url: &str) -> Result<PGPool> {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let _guard = init_slog_logging(false)?;
+    let _guard = init_slog_logging(false, false)?;
 
     dotenv().ok();
 

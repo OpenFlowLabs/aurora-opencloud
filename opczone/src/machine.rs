@@ -1,13 +1,13 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::{HashMap, BTreeSet}, path::Path};
 
-use crate::{run_with_stdin, vmext::write_brand_config};
+use crate::{vmext::write_brand_config};
 use anyhow::Result;
 use common::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::brand::Brand;
 
-const ZONECFG_BIN: &str = "/usr/sbin/zonecfg";
 const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const ZONE_IDENT_LEN: usize = 6;
 
@@ -19,44 +19,44 @@ fn default_dns_domain() -> String {
     "local".into()
 }
 
-fn default_lwps() -> i32 {
+fn default_lwps() -> u32 {
     2000
 }
 
-fn default_mdata_exec_timeout() -> i32 {
+fn default_mdata_exec_timeout() -> u32 {
     300
 }
 
-fn default_ram() -> i32 {
+fn default_ram() -> u32 {
     256
 }
 
-fn default_vcpus() -> i32 {
+fn default_vcpus() -> u32 {
     1
 }
 
-fn default_virtio_txburst() -> i32 {
+fn default_virtio_txburst() -> u32 {
     128
 }
 
-fn default_virtio_txtimer() -> i32 {
+fn default_virtio_txtimer() -> u32 {
     200000
 }
 
-fn default_zfs_io_priority() -> i32 {
+fn default_zfs_io_priority() -> u32 {
     100
 }
 
-fn default_quota() -> i32 {
+fn default_quota() -> u32 {
     10
 }
 
-fn default_cpu_shares() -> i32 {
+fn default_cpu_shares() -> u32 {
     100
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct BlockSize(i32);
+pub struct BlockSize(u32);
 
 impl Default for BlockSize {
     fn default() -> Self {
@@ -74,7 +74,7 @@ fn deserialize_block_size<'de, D>(deserializer: D) -> Result<BlockSize, D::Error
 where
     D: serde::de::Deserializer<'de>,
 {
-    let blk_size = i32::deserialize(deserializer)?;
+    let blk_size = u32::deserialize(deserializer)?;
 
     if blk_size < 512 {
         return Err(serde::de::Error::custom(
@@ -93,30 +93,6 @@ where
     }
 
     Ok(BlockSize(blk_size))
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum VMBrand {
-    Kvm,
-    Bhyve,
-    Image,
-    Joyent,
-    JoyentMinimal,
-    Sngl,
-}
-
-impl Display for VMBrand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VMBrand::Kvm => write!(f, "kvm"),
-            VMBrand::Bhyve => write!(f, "bhyve"),
-            VMBrand::Image => write!(f, "opczimage"),
-            VMBrand::Joyent => write!(f, "joyent"),
-            VMBrand::JoyentMinimal => write!(f, "joyent-minimal"),
-            VMBrand::Sngl => write!(f, "sngl"),
-        }
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -387,7 +363,7 @@ pub struct OnDiskPayload {
     pub hostname: Option<String>,
     pub internal_metadata: Option<Value>,
     pub maintain_resolvers: bool,
-    pub mdata_exec_timeout: i32,
+    pub mdata_exec_timeout: u32,
     pub nics: Vec<OnDiskNicPayload>,
     pub nic_driver: Option<NicModel>,
     pub nowait: bool,
@@ -398,14 +374,14 @@ pub struct OnDiskPayload {
     pub qemu_extra_opts: Option<String>,
     pub resolvers: Option<Vec<String>>,
     pub routes: Option<HashMap<String, String>>,
-    pub tmpfs: Option<i32>,
+    pub tmpfs: Option<u32>,
     pub uuid: uuid::Uuid,
-    pub vcpus: i32,
+    pub vcpus: u32,
     pub vga: VMGraphicsKind,
-    pub virtio_txburst: i32,
-    pub virtio_txtimer: i32,
+    pub virtio_txburst: u32,
+    pub virtio_txtimer: u32,
     pub vnc_password: Option<String>,
-    pub vnc_port: Option<i32>,
+    pub vnc_port: Option<u32>,
 }
 
 impl From<CreatePayload> for OnDiskPayload {
@@ -465,10 +441,10 @@ pub struct CreatePayload {
     pub autoboot: bool,
     pub billing_id: Option<uuid::Uuid>,
     pub boot: Option<String>,
-    pub brand: VMBrand,
-    pub cpu_cap: Option<i32>,
+    pub brand: Brand,
+    pub cpu_cap: Option<u32>,
     #[serde(default = "default_cpu_shares")]
-    pub cpu_shares: i32,
+    pub cpu_shares: u32,
     pub cpu_type: Option<String>,
     pub customer_metadata: Option<Value>,
     pub image_uuid: Option<uuid::Uuid>,
@@ -494,13 +470,13 @@ pub struct CreatePayload {
     pub limit_priv: Option<String>,
     #[serde(default = "default_to_false")]
     pub maintain_resolvers: bool,
-    pub max_locked_memory: Option<i32>,
+    pub max_locked_memory: Option<u32>,
     #[serde(default = "default_lwps")]
-    pub max_lwps: i32,
-    pub max_physical_memory: Option<i32>,
-    pub max_swap: Option<i32>,
+    pub max_lwps: u32,
+    pub max_physical_memory: Option<u32>,
+    pub max_swap: Option<u32>,
     #[serde(default = "default_mdata_exec_timeout")]
-    pub mdata_exec_timeout: i32,
+    pub mdata_exec_timeout: u32,
     pub nics: Option<Vec<AddNicPayload>>,
     pub nic_driver: Option<NicModel>,
     #[serde(default = "default_to_false")]
@@ -511,31 +487,31 @@ pub struct CreatePayload {
     pub qemu_opts: Option<String>,
     pub qemu_extra_opts: Option<String>,
     #[serde(default = "default_quota")]
-    pub quota: i32,
+    pub quota: u32,
     #[serde(default = "default_ram")]
-    pub ram: i32,
+    pub ram: u32,
     pub resolvers: Option<Vec<String>>,
     pub routes: Option<HashMap<String, String>>,
     pub spice_opts: Option<String>,
     pub spice_password: Option<String>,
-    pub spice_port: Option<i32>,
-    pub tmpfs: Option<i32>,
+    pub spice_port: Option<u32>,
+    pub tmpfs: Option<u32>,
     pub uuid: Option<uuid::Uuid>,
     #[serde(default = "default_vcpus")]
-    pub vcpus: i32,
+    pub vcpus: u32,
     #[serde(default)]
     pub vga: VMGraphicsKind,
     #[serde(default = "default_virtio_txburst")]
-    pub virtio_txburst: i32,
+    pub virtio_txburst: u32,
     #[serde(default = "default_virtio_txtimer")]
-    pub virtio_txtimer: i32,
+    pub virtio_txtimer: u32,
     pub vnc_password: Option<String>,
-    pub vnc_port: Option<i32>,
+    pub vnc_port: Option<u32>,
     pub zfs_data_compression: Option<DiskCompressionMethods>,
     #[serde(default = "BlockSize::default_zfs_recsize")]
     pub zfs_data_recsize: BlockSize,
     #[serde(default = "default_zfs_io_priority")]
-    pub zfs_io_priority: i32,
+    pub zfs_io_priority: u32,
     pub zfs_root_compression: Option<DiskCompressionMethods>,
     #[serde(default = "BlockSize::default_zfs_recsize")]
     pub zfs_root_recsize: BlockSize,
@@ -553,7 +529,7 @@ impl Default for CreatePayload {
             autoboot: false,
             billing_id: None,
             boot: None,
-            brand: VMBrand::Image,
+            brand: Brand::Image,
             cpu_cap: None,
             cpu_shares: default_cpu_shares(),
             cpu_type: None,
@@ -676,91 +652,110 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         uuid::Uuid::new_v4()
     };
 
-    //We assume /zones is the dataset where all zones should be located
-    let mut zonecfg_stdin = vec![
-        "create -b".into(),
-        format!("set brand={}", &payload.brand),
-        "set ip-type=exclusive".into(),
-        format!("set zonepath=/zones/{}", zone_uuid.to_string()),
-        format!("set max-lwps={}", &payload.max_lwps),
-        format!("set cpu-shares={}", &payload.cpu_shares),
-    ];
+    let mut cfg = zone::Config::create(zone_uuid.to_string(), true, zone::CreationOptions::Blank);
 
-    if let Some(cpu_cap) = &payload.cpu_cap {
-        zonecfg_stdin.push(format!("set capped-cpu={:.2}", cpu_cap / 100));
+    //We assume /zones is the dataset where all zones should be located
+    cfg.get_global()
+        .set_brand(payload.brand.to_string())
+        .set_ip_type(zone::IpType::Exclusive)
+        .set_path(Path::new("/zones").join(zone_uuid.to_string()))
+        .set_max_lwps(Some(payload.max_lwps))
+        .set_cpu_shares(Some(payload.cpu_shares));
+    
+
+    if let Some(cpu_cap) = payload.cpu_cap {
+        let caps = zone::CappedCpu{
+            ncpus: cpu_cap as f64 / 100.0,
+        };
+        cfg.add_capped_cpu(&caps);
     }
 
     if payload.delegate_dataset {
-        zonecfg_stdin.push("add dataset".into());
-        zonecfg_stdin.push(format!("set name=/zones/{}/data", zone_uuid.to_string()));
-        zonecfg_stdin.push("end".into());
+        let ds = zone::Dataset{
+            name: format!("/zones/{}/data", zone_uuid.to_string()),
+        };
+        cfg.add_dataset(&ds);
     }
 
     if let Some(filesystems) = &payload.filesystems {
         for fs in filesystems {
             // dir, special, raw, type, options
-            zonecfg_stdin.push("add fs".into());
-            zonecfg_stdin.push(format!("set dir={}", fs.target));
-            zonecfg_stdin.push(format!("set special={}", fs.source));
-            if !fs.raw.is_empty() {
-                zonecfg_stdin.push(format!("set raw={}", fs.raw));
-            }
-            zonecfg_stdin.push(format!("set type={}", fs.fs_type));
-            zonecfg_stdin.push(format!("set options={}", fs.options.join(",")));
-            zonecfg_stdin.push("end".into());
+            let raw = if !fs.raw.is_empty() {
+                Some(fs.raw.clone())
+            } else {
+                None
+            };
+
+            let f = zone::Fs{ 
+                ty: fs.fs_type.clone(), 
+                dir: fs.target.clone(), 
+                special: fs.source.clone(), 
+                raw: raw, 
+                options: fs.options.clone(), 
+            };
+            cfg.add_fs(&f);
         }
     }
 
-    if let Some(limit_priv) = &payload.limit_priv {
-        zonecfg_stdin.push(format!("set limitpriv={}", limit_priv));
+    if let Some(limit_priv) = payload.limit_priv.clone() {
+        let mut privset = BTreeSet::new();
+        for p in limit_priv.split(",") {
+            privset.insert(p.clone().to_owned());
+        }
+
+        cfg.get_global().set_limitpriv(privset);
     }
 
-    zonecfg_stdin.push("add capped-memory".into());
-    if let Some(mut max_physical_memory) = &payload.max_physical_memory {
+    
+    let capped_memory = if let Some(mut max_physical_memory) = &payload.max_physical_memory {
         if max_physical_memory < payload.ram {
-            if payload.brand == VMBrand::Kvm || payload.brand == VMBrand::Bhyve {
+            if payload.brand == Brand::Propolis || payload.brand == Brand::Bhyve {
                 max_physical_memory = payload.ram + 1024;
             } else {
                 max_physical_memory = payload.ram;
             }
         }
-        zonecfg_stdin.push(format!("set physical={}M", max_physical_memory));
+        max_physical_memory
     } else {
-        zonecfg_stdin.push(format!("set physical={}M", payload.ram));
-    }
+        payload.ram
+    };
+
+    let mut mem_cap = zone::CappedMemory{ 
+        physical: Some(format!("{}M", (capped_memory as f64 / 1024.0).to_string())), 
+        ..Default::default()
+    };
+
     if let Some(max_locked_memory) = payload.max_locked_memory {
-        zonecfg_stdin.push(format!("set locked={}", max_locked_memory));
+        mem_cap.locked = Some(max_locked_memory.to_string());
     }
+
     if let Some(max_swap) = payload.max_swap {
-        zonecfg_stdin.push(format!("set swap={}", max_swap));
+        mem_cap.swap = Some(max_swap.to_string());
     }
-    zonecfg_stdin.push("end".into());
+    cfg.add_capped_memory(&mem_cap);
 
     let mut disk_payload: OnDiskPayload = payload.into();
     disk_payload.uuid = zone_uuid;
 
     for nic in &disk_payload.nics {
-        zonecfg_stdin.push("add net".into());
+        let mut nic_opts = zone::Net{ 
+            physical: nic.interface.clone(), 
+            ..Default::default()
+        };
+
         if nic.allowed_ips.len() > 0 {
-            zonecfg_stdin.push(format!("set allowed-address={}", nic.allowed_ips[0]));
+            nic_opts.allowed_address = Some(nic.allowed_ips[0].clone());
         }
-        if let Some(gateway) = &nic.gateway {
-            zonecfg_stdin.push(format!("set defrouter={}", gateway));
+        if let Some(gateway) = nic.gateway.clone() {
+            nic_opts.default_router = Some(gateway);
         }
-        zonecfg_stdin.push(format!("set physical={}", nic.interface));
-        zonecfg_stdin.push("end".into());
+        
+        cfg.add_net(&nic_opts);
     }
-    zonecfg_stdin.push("verify".into());
+    
+    cfg.run()?;
 
-    zonecfg_stdin.push("commit".into());
-
-    info!(target: "define_vm", "zonecfg string: {}", zonecfg_stdin.clone().join(";"));
-
-    run_with_stdin(
-        &[ZONECFG_BIN, "-z", &zone_uuid.to_string()],
-        None,
-        zonecfg_stdin.join("\n"),
-    )?;
+    info!(target: "define_vm", "defining VM: {}", zone_uuid.to_string());
 
     write_brand_config(&disk_payload)?;
 

@@ -233,7 +233,7 @@ fn make_token_for_auth_entry(entry: &AuthEntry) -> Result<String> {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let _guard = init_slog_logging(false)?;
+    let _guard = init_slog_logging(false, false)?;
     let mut client = TenantClient::connect(cli.get_api_destination()).await?;
 
     match cli.command {

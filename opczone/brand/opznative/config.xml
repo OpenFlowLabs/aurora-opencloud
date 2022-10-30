@@ -30,7 +30,7 @@
 <!DOCTYPE brand PUBLIC "-//Sun Microsystems Inc//DTD Brands//EN"
     "file:///usr/share/lib/xml/dtd/brand.dtd.1">
 
-<brand name="opczimage">
+<brand name="opcnative">
 	<modname></modname>
 
 	<initname>/sbin/init</initname>
@@ -38,23 +38,23 @@
 	<forcedlogin_cmd>/usr/bin/login -z %Z -f %u</forcedlogin_cmd>
 	<user_cmd>/usr/bin/getent passwd %u</user_cmd>
 
-	<install>/usr/lib/brand/opczimage/install --brand=image -z %z -R %R</install>
+	<install>/usr/lib/brand/opcnative/install --brand=native -z %z -R %R</install>
 	<installopts>R:t:U:q:z:b:</installopts>
 	<boot></boot>
-	<sysboot>/usr/lib/brand/opczimage/statechange pre %z %R 2 0</sysboot>
+	<sysboot>/usr/lib/brand/opcnative/statechange pre %z %R 2 0</sysboot>
 	<halt></halt>
 	<shutdown>/usr/sbin/shutdown -y -g0 -i5</shutdown>
 	<verify_cfg></verify_cfg>
 	<verify_adm></verify_adm>
 	<postclone></postclone>
 	<postinstall></postinstall>
-	<attach>/usr/lib/brand/opczimage/attach %z %R</attach>
-	<detach>/usr/lib/brand/opczimage/detach -z %z -R %R</detach>
+	<attach>/usr/lib/brand/opcnative/attach %z %R</attach>
+	<detach>/usr/lib/brand/opcnative/detach -z %z -R %R</detach>
 	<clone></clone>
-	<uninstall>/usr/lib/brand/opczimage/uninstall -z %z -R %R</uninstall>
-	<prestatechange>/usr/lib/brand/opczimage/statechange pre %z %R</prestatechange>
-	<poststatechange>/usr/lib/brand/opczimage/statechange post %z %R</poststatechange>
-	<query>/usr/lib/brand/opczimage/query %z %R</query>
+	<uninstall>/usr/lib/brand/opcnative/uninstall -z %z -R %R</uninstall>
+	<prestatechange>/usr/lib/brand/opcnative/statechange pre %z %R</prestatechange>
+	<poststatechange>/usr/lib/brand/opcnative/statechange post %z %R</poststatechange>
+	<query>/usr/lib/brand/opcnative/query %z %R</query>
 
 	<privilege set="default" name="contract_event" />
 	<privilege set="default" name="contract_identity" />

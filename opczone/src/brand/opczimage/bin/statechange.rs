@@ -1,19 +1,18 @@
-use std::{fs::DirBuilder, os::unix::fs::DirBuilderExt, path::Path};
+use std::{fs::DirBuilder, os::unix::fs::DirBuilderExt};
 
 use anyhow::{bail, Context, Result};
 use clap::{ArgEnum, Parser};
 use common::{init_slog_logging, info, debug};
 use opczone::{
-    brand::{ZONE_CMD_BOOT, ZONE_CMD_HALT, ZONE_CMD_READY, ZONE_CMD_UNMOUNT, ZONE_STATE_DOWN},
+    brand::{ZONE_CMD_BOOT, ZONE_CMD_HALT, ZONE_CMD_READY, ZONE_CMD_UNMOUNT, ZONE_STATE_DOWN, build_zonecontrol_gz_path, build_zonemeta_gz_path},
     dladm::{
         create_vnic, does_aggr_exist, does_etherstub_exist, does_phys_exist, show_one_vnic,
         show_vnic, CreateVNICArgs, CreateVNICProps, does_vnic_exist,
     },
-    machine::{OnDiskNicPayload, OnDiskPayload},
+    machine::{OnDiskPayload},
     vmext::{get_brand_config, write_brand_config},
 };
 use thiserror::Error;
-use zone::CreationOptions;
 
 const DEFAULT_MTU: i32 = 1500;
 
@@ -46,7 +45,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let _log_guard = init_slog_logging(false)?;
+    let _log_guard = init_slog_logging(false, true)?;
 
     let cli: Cli = Cli::parse();
 
@@ -58,7 +57,7 @@ fn main() -> Result<()> {
                 ZONE_CMD_READY => {
                     //pre-ready
                     info!("Pre-ready");
-                    setup_zone_control_dir(&cli.zonename, &cli.zonepath)?;
+                    setup_zone_helper_directories(&cli.zonename, &cli.zonepath)?;
                     cfg = setup_net(&cli.zonename, &cli.zonepath, &cfg)?;
                 }
                 ZONE_CMD_HALT => {
@@ -73,14 +72,14 @@ fn main() -> Result<()> {
             ZONE_CMD_READY => {
                 //post-ready
                 info!("Post-ready");
-                //setup_fw(&cli.zonename, &cli.zonepath, &cfg)?;
+                setup_fw(&cli.zonename, &cli.zonepath, &cfg)?;
             }
             ZONE_CMD_BOOT => {
                 // post-boot
                 // We can't set a rctl until we have a process in the zone to
                 // grab
                 //TODO: Check why the brand script needs to do this and leave it to zonecfg for now.
-                //setup_cpu_baseline(&cli.zonename, &cli.zonepath, &cfg)?;
+                setup_cpu_baseline(&cli.zonename, &cli.zonepath, &cfg)?;
             }
             ZONE_CMD_UNMOUNT => {
                 // post-unmount
@@ -128,8 +127,8 @@ fn setup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<OnD
         */
         debug!("Checking for backing interface {}", &nic.nic_tag);
         if !does_phys_exist(&nic.nic_tag)
-            //|| !does_aggr_exist(&nic.nic_tag)
-            //|| !does_etherstub_exist(&nic.nic_tag)
+            && !does_aggr_exist(&nic.nic_tag)
+            && !does_etherstub_exist(&nic.nic_tag)
         {
             //TODO: Overlay handling here
             bail!(StateChangeError::NoBackingInterface(nic.nic_tag))
@@ -203,24 +202,24 @@ enum StateChangeError {
 }
 
 fn setup_fw(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
-    todo!()
+    Ok(())
 }
 
 fn setup_cpu_baseline(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
-    todo!()
+    Ok(())
 }
 
 fn cleanup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
-    todo!()
+    Ok(())
 }
 
 fn cleanup_mount(zonename: &str, _zonepath: &str, mount_to_diagnose: Option<String>) -> Result<()> {
-    todo!()
+    Ok(())
 }
 
 // This function runs in the global zone to make sure the directories the zone will need are setup
-fn setup_zone_control_dir(zonename: &str, _zonepath: &str) -> Result<()> {
-    let zonecontrol_path = Path::new("/var/zonecontrol").join(zonename);
+fn setup_zone_helper_directories(zonename: &str, _zonepath: &str) -> Result<()> {
+    let zonecontrol_path = build_zonecontrol_gz_path(zonename);
     //mkdir -m755 -p /var/zonecontrol/${ZONENAME}
     if !zonecontrol_path.exists() {
         DirBuilder::new()
@@ -229,6 +228,19 @@ fn setup_zone_control_dir(zonename: &str, _zonepath: &str) -> Result<()> {
             .create(&zonecontrol_path)
             .context(format!(
                 "unable to create zone control directory {}",
+                zonename
+            ))?;
+    }
+
+    let zonemeta_path = build_zonemeta_gz_path(zonename);
+    //mkdir -m755 -p /var/zonemeta/${ZONENAME}
+    if !zonemeta_path.exists() {
+        DirBuilder::new()
+            .mode(0o755)
+            .recursive(true)
+            .create(&zonemeta_path)
+            .context(format!(
+                "unable to create zone meta directory {}",
                 zonename
             ))?;
     }

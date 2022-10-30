@@ -645,7 +645,7 @@ async fn serve<P: AsRef<Path>>(
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let _guard = init_slog_logging(false)?;
+    let _guard = init_slog_logging(false, false)?;
 
     dotenv().ok();
 

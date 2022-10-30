@@ -5,7 +5,7 @@ use super::{Document, Action};
 
 type Result<T> = std::result::Result<T, BundleError>;
 
-pub const BUILD_BUNDLE_IMAGE_PATH: &str = "/build_bundle";
+pub const BUILD_BUNDLE_IMAGE_PATH: &str = "/.zonemeta/build_bundle";
 pub const BUILD_BUNDLE_BUILD_CONFIG_FILENAME: &str = "build.kdl";
 
 #[derive(Debug, Error)]
@@ -14,6 +14,8 @@ pub enum BundleError {
     FsError(#[from] fs_extra::error::Error),
     #[error("received an io error while reading bundle: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("file {0} does not exist in bundle")]
+    FileDoesExistsErr(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -75,14 +77,27 @@ impl Bundle {
         })
     }
 
+    pub fn get_files_path(&self) -> PathBuf {
+        self.source_path.join("files")
+    }
+
     pub fn get_template_string(&self, name: &str) -> Result<String> {
         let file = self.template_search_path.join(name);
         let text = std::fs::read_to_string(&file)?;
         Ok(text)
     }
 
-    pub fn get_path(&self) -> PathBuf {
-        self.source_path.clone()
+    pub fn get_path(&self) -> &Path {
+        &self.source_path
+    }
+
+    pub fn get_file<P: AsRef<Path>>(&self, relative_file_path: P) -> Result<PathBuf> {
+        let full_path = self.get_files_path().join(relative_file_path.as_ref());
+        if !full_path.exists() {
+            return Err(BundleError::FileDoesExistsErr(relative_file_path.as_ref().to_string_lossy().to_string()));
+        }
+
+        Ok(full_path)
     }
 
     pub fn get_audit_info(&self) -> BuildBundleAuditInfo {
@@ -112,7 +127,7 @@ impl Bundle {
     }
 
     pub fn save_to_zone(&self, zonepath: &str) -> Result<()> {
-        let path = Path::new(zonepath).join(BUILD_BUNDLE_IMAGE_PATH);
+        let path = Path::new(zonepath).join("meta/build_bundle");
         self.save_to(path)
     }
 }

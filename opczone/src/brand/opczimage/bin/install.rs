@@ -5,14 +5,13 @@ use illumos_image_builder::{dataset_clone, dataset_create, zfs_set};
 use opczone::{
     build::{bundle::{Bundle}, run_action},
     get_zonepath_parent_ds,
-    vmext::get_brand_config,
+    vmext::get_brand_config, brand::Brand,
 };
 use std::{
     fs::DirBuilder,
     os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
 };
-//use zone::{Config as ZoneConfig, Global};
 
 #[derive(Parser)]
 struct Cli {
@@ -25,6 +24,9 @@ struct Cli {
     #[clap(short = 'q')]
     quota: i32,
 
+    #[clap(long, default_value_t=Brand::Native)]
+    brand: Brand,
+
     #[clap(short = 't')]
     image_uuid: Option<uuid::Uuid>,
 
@@ -33,7 +35,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let _log_guard = init_slog_logging(false)?;
+    let _log_guard = init_slog_logging(false, true)?;
 
     let cli: Cli = Cli::parse();
 
@@ -43,13 +45,20 @@ fn main() -> Result<()> {
         bail!("can only either deploy an image production by setting and image or build an image by setting build bundle. Both are set, bailing")
     }
 
+    if cli.image_uuid.is_none() && cli.build_bundle.is_none() {
+        bail!("must have image uuid or build bundle specified")
+    }
+
     setup_dataset(
         &cli.zonename,
         &cli.zonepath,
         cli.quota,
         cli.image_uuid,
         cli.build_bundle.clone(),
+        cli.brand.clone(),
     )?;
+
+    setup_zone_fs(&cli.zonename, &cli.zonepath, cli.brand.clone())?;
 
     if let Some(build_bundle) = cli.build_bundle {
         let bundle = Bundle::new(&build_bundle).map_err(|err| anyhow!("{:?}", err))?;
@@ -58,18 +67,15 @@ fn main() -> Result<()> {
             bail!("Bundle is not safe to run in gz: Either this bundle must be based on another image or it's first action must be an ips action.")
         }
 
-        let zone_root = format!("{}/root", cli.zonepath);
-
-        //Run first IPS action to install image base
+        //Run first IPS action to install base image
         if let Some(ips_action) = bundle.document.actions.first() {
-            run_action(&zone_root, ips_action.clone())?;
+            let zone_root = format!("{}/root", &cli.zonepath);
+            run_action(&zone_root, &bundle, ips_action.clone())?;
         }
 
         //Save image bundle inside the image with first IPS action removed
-        bundle.save_to_zone(&zone_root)?;
+        bundle.save_to_zone(&cli.zonepath)?;
     }
-
-    setup_zone_fs(&cli.zonename, &cli.zonepath)?;
 
     Ok(())
 }
@@ -82,6 +88,7 @@ fn setup_dataset(
     zonequota: i32,
     image: Option<uuid::Uuid>,
     build_bundle: Option<PathBuf>,
+    brand: Brand,
 ) -> Result<()> {
     let parent_dataset = get_zonepath_parent_ds(zonepath)?;
 
@@ -112,8 +119,12 @@ fn setup_dataset(
             zfs_set(&root_dataset_name, "quota", &quota_arg)?;
         } else {
             //TODO: clone base image
+            println!("Cloning the base image is not implemented yet");
             todo!()
         }
+    } else if brand == Brand::Bhyve || brand == Brand::Propolis {
+        println!("Empty VM creation not yet implemented");
+        todo!()
     } else {
         bail!("neither image uuid or build bundle specified this would create an empty (unusable) zone")
     }
@@ -121,8 +132,9 @@ fn setup_dataset(
     Ok(())
 }
 
-fn setup_zone_fs(zonename: &str, zonepath: &str) -> Result<()> {
+fn setup_zone_fs(zonename: &str, zonepath: &str, brand: Brand) -> Result<()> {
     let config_path = Path::new(zonepath).join("config");
+    let meta_path = Path::new(zonepath).join("meta");
     let zone_root = Path::new(zonepath).join("root");
     let zone_tmp = zone_root.join("tmp");
 
@@ -141,6 +153,18 @@ fn setup_zone_fs(zonename: &str, zonepath: &str) -> Result<()> {
             .mode(0o1777)
             .create(&zone_tmp)
             .context(format!("unable to create zone tmp directory: {}", zonename))?;
+    }
+
+    if brand == Brand::Image {
+        if !meta_path.exists() {
+            DirBuilder::new()
+                .mode(0o755)
+                .create(&meta_path)
+                .context(format!(
+                    "unable to create zone config directory: {}",
+                    zonename
+                ))?;
+        }
     }
 
     Ok(())

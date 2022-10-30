@@ -1,8 +1,19 @@
 use anyhow::{Result, bail};
+use common::info;
+use illumos_image_builder::{dataset_create, zfs_set};
+use tera::Context;
 use std::{
     collections::HashMap,
-    path::{PathBuf},
+    path::{PathBuf, Path},
 };
+
+use crate::{get_zone_dataset, brand::{ZONEMETA_NGZ_PATH}};
+use self::bundle::Bundle;
+
+/*
+ * Hard-coded user ID and group ID for root:
+ */
+const ROOT: u32 = 0;
 
 pub mod bundle;
 
@@ -37,7 +48,27 @@ pub enum Action {
     File(File),
     Perm(Dir),
     Ips(Ips),
-    SeedSmf,
+    SeedSmf(Smf),
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Action::Volume(v) => write!(f, "Action Volume: {}", v.name),
+            Action::Remove(r) => write!(f, "Action Remove: {}", r),
+            Action::ExtractTarball(t) => write!(f, "Action Extract Tarball: {}", t),
+            Action::InitializeDevfs => write!(f, "Action Initialize DevFs"),
+            Action::AssembleFile(fil) => write!(f, "Action Assemble File: {}", fil.output.display()),
+            Action::Group(g) => write!(f, "Action Ensure Group: {}", g),
+            Action::User(u, _) => write!(f, "Action Ensure User: {}", u),
+            Action::Symlink(l) => write!(f, "Action Ensure Symlink: {} -> {}", l.target.display(), l.link.display()),
+            Action::Dir(d) => write!(f, "Action Ensure Directory: {}", d.path.display()),
+            Action::File(fil) => write!(f, "Action Ensure File: {}", fil.path.display()),
+            Action::Perm(p) => write!(f, "Action Ensure Permissions: {}", p.path.display()),
+            Action::Ips(_) => Ok(()),
+            Action::SeedSmf(_smf) => write!(f, "Action seeding SMF repo"),
+        }
+    }
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -52,10 +83,33 @@ pub struct IpsProperties {
     pub properties: HashMap<String, String>,
 }
 
+impl std::fmt::Display for IpsProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut v = vec![];
+        for (key, value) in &self.properties {
+            v.push(format!("{}={}",key, value))
+        }
+
+        if v.len() > 1 {
+            let out = v.join(",");
+            write!(f, "[{}]", out)
+        } else {
+            write!(f, "{}", v[0])
+        }
+    }
+}
+
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
 pub struct IpsPackageList {
     #[knuffel(arguments)]
     pub packages: Vec<String>,
+}
+
+impl std::fmt::Display for IpsPackageList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let out = self.packages.join(",");
+        write!(f, "[{}]", out)
+    }
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -71,6 +125,24 @@ pub enum IpsActions {
     SetFacet(IpsProperties),
     PurgeHistory,
     SetMediator(Mediator),
+}
+
+impl std::fmt::Display for IpsActions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IpsActions::InitializeImage => write!(f, "Initialize Image"),
+            IpsActions::InstallPackages(p) => write!(f, "Installing packages {}", p),
+            IpsActions::InstallOptionals => write!(f, "Install optionals"),
+            IpsActions::SetProperty(p) => write!(f, "Setting properties {}", p),
+            IpsActions::SetPublisher(publ) => write!(f, "Setting Publisher {}", publ.publisher),
+            IpsActions::ApprovePublisherCA(ca) => write!(f, "Approving CA for {}", ca.publisher),
+            IpsActions::UninstallPackages(p) => write!(f, "Removing packages {}", p),
+            IpsActions::SetVariant(v) => write!(f, "Setting variants {}", v),
+            IpsActions::SetFacet(fac) => write!(f, "Set facets {}", fac),
+            IpsActions::PurgeHistory => write!(f, "Pruging History"),
+            IpsActions::SetMediator(m) => write!(f, "Setting Mediator {}", m.name),
+        }
+    }
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -106,7 +178,7 @@ pub struct CommonPerms {
     #[knuffel(child, unwrap(argument))]
     pub group: Option<String>,
     #[knuffel(child, unwrap(argument))]
-    pub mode: Option<i32>,
+    pub mode: Option<u32>,
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -175,30 +247,308 @@ pub struct AssembleFile {
     pub prefix: Option<String>,
 }
 
-pub fn run_action(root: &str, action: Action) -> Result<()> {
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct Smf {
+    #[knuffel(child, unwrap(argument), default = false)]
+    pub debug: bool,
+    #[knuffel(child, unwrap(argument), default = false)]
+    pub apply_site: bool,
+}
+
+pub fn run_action(root: &str, bundle: &Bundle, action: Action) -> Result<()> {
+    info!("Running {}", action);
     match action {
-        Action::Volume(_) => todo!(),
-        Action::Remove(_) => todo!(),
-        Action::ExtractTarball(_) => todo!(),
-        Action::InitializeDevfs => todo!(),
-        Action::AssembleFile(_) => todo!(),
-        Action::Group(_) => todo!(),
-        Action::User(_, _) => todo!(),
-        Action::Symlink(_) => todo!(),
-        Action::Dir(_) => todo!(),
-        Action::File(_) => todo!(),
-        Action::Perm(_) => todo!(),
+        Action::Volume(volume) => {
+
+            if zone::current()? == "global".to_string() {
+                panic!("Volume creation is only supported inside a zone")
+            }
+
+            let zds = get_zone_dataset("/")?;
+
+            let vds = format!("{}/{}", zds, volume.name);
+
+            dataset_create(&vds, false)?;
+
+            for prop in volume.properties {
+                zfs_set(&vds, &prop.name, &prop.value)?;
+            }
+
+            if let Some(p) = volume.mountpoint {
+                zfs_set(&vds, "mountpoint", &p)?;
+            }
+
+            Ok(())
+        },
+        Action::Remove(path) => {
+            let rpath = Path::new(root);
+            let path = Path::new(&path).strip_prefix("/")?;
+
+            let paths = vec![rpath.join(path)];
+            fs_extra::remove_items(&paths)?;
+
+            Ok(())
+        },
+        Action::ExtractTarball(tarball) => {
+            let full_tarball_path = bundle.get_file(&tarball)?;
+            crate::run(&[
+                "/usr/sbin/tar",
+                "xzeEp@/f",
+                &full_tarball_path.to_string_lossy(),
+                "-C",
+                root,
+            ], Some(&[]))?;
+            Ok(())
+        },
+        Action::InitializeDevfs => {
+            crate::run(&["/usr/sbin/devfsadm", "-r", root], None)
+        },
+        Action::AssembleFile(assemble) => {
+            let source_path = bundle.get_file(assemble.dir)?;
+            let output_path = Path::new(root).join(assemble.output.strip_prefix("/")?);
+
+            let mut files: Vec<String> = Vec::new();
+            let mut diri = std::fs::read_dir(source_path)?;
+            while let Some(ent) = diri.next().transpose()? {
+                // We keep unwrap here since if this fails something on the system is critically broken
+                // I assume so at least.
+                if !ent.file_type().unwrap().is_file() {
+                    continue;
+                }
+
+                let n = ent.file_name();
+                let n = n.to_string_lossy().to_string();
+                if let Some(ref prefix) = assemble.prefix {
+                    if !n.starts_with(prefix.as_str()) {
+                        continue;
+                    }
+                }
+
+                files.push(ent.path().to_str().unwrap().to_string());
+            }
+
+            files.sort();
+
+            let mut outstr = String::new();
+            for f in files.iter() {
+                let inf = std::fs::read_to_string(&f)?;
+                let out = inf.trim();
+                if out.is_empty() {
+                    continue;
+                }
+                outstr += out;
+                if !outstr.ends_with('\n') {
+                    outstr += "\n";
+                }
+            }
+
+            illumos_image_builder::ensure::filestr(&outstr, &output_path, 
+                ROOT, 
+                ROOT, 
+                0o644, 
+                illumos_image_builder::ensure::Create::Always
+            )?;
+
+            Ok(())
+        },
+        Action::Group(_group) => bail!("Group creation not yet supported"),
+        Action::User(user, pw) => {
+            /*
+            * Read the shadow file:
+            */
+            let path = Path::new(root).join("etc/shadow");
+
+            let orig = illumos_image_builder::ShadowFile::load(&path)?;
+            let mut copy = orig.clone();
+
+            if let Some(password) = pw {
+                copy.password_set(&user, &password)?;
+            }
+
+            if orig == copy {
+                info!("no change to shadow file; skipping write");
+            } else {
+                info!("updating shadow file");
+                copy.write(&path)?;
+                illumos_image_builder::ensure::perms(&path, 
+                    ROOT, 
+                    ROOT, 
+                    0o400
+                )?;
+            }
+
+            Ok(())
+        },
+        Action::Symlink(link) => {
+            let target_path = Path::new(root).join(&link.target);
+            let link_path = Path::new(root).join(&link.link);
+
+            let owner = if let Some(user) = link.owner { 
+                illumos_image_builder::translate_uid(&user)? 
+            } else {
+                0
+            };
+
+            let group = if let Some(group) = link.group {
+                illumos_image_builder::translate_gid(&group)?
+            } else {
+                0
+            };
+
+            illumos_image_builder::ensure::symlink(&link_path, &target_path, owner, group)?;
+
+            Ok(())
+        },
+        Action::Dir(dir) => {
+
+            let target_path = Path::new(root).join(dir.path.strip_prefix("/")?);
+
+            let owner = if let Some(user) = dir.common.owner { 
+                illumos_image_builder::translate_uid(&user)? 
+            } else {
+                0
+            };
+
+            let group = if let Some(group) = dir.common.group {
+                illumos_image_builder::translate_gid(&group)?
+            } else {
+                0
+            };
+
+            let mode = if let Some(mode) = dir.common.mode {
+                mode
+            } else {
+                0o750
+            };
+
+            illumos_image_builder::ensure::directory(&target_path, owner, group, mode)?;
+
+            Ok(())
+        },
+        Action::File(file) => {
+            let target_path = Path::new(root).join(file.path.strip_prefix("/")?);
+
+            let owner = if let Some(user) = file.common.owner { 
+                illumos_image_builder::translate_uid(&user)? 
+            } else {
+                0
+            };
+
+            let group = if let Some(group) = file.common.group {
+                illumos_image_builder::translate_gid(&group)?
+            } else {
+                0
+            };
+
+            let mode = if let Some(mode) = file.common.mode {
+                mode
+            } else {
+                0o750
+            };
+
+            if let Some(src) = file.src {
+                if file.is_template {
+                    let template = bundle.get_template_string(&src)?;
+
+                    let mut tera = tera::Tera::new("")?;
+                    let res = tera.render_str(&template, &Context::new())?;
+
+                    illumos_image_builder::ensure::filestr(&res, 
+                        &target_path, 
+                        owner, group, mode, 
+                        illumos_image_builder::ensure::Create::Always,
+                    )?;
+                } else {
+                    let source_path = bundle.get_file(&src)?;
+
+                    illumos_image_builder::ensure::file(&source_path, 
+                        &target_path, 
+                        owner, group, mode, 
+                        illumos_image_builder::ensure::Create::Always,
+                    )?;
+                }
+            } else if let Some(content) = file.content {
+                if file.is_template {
+                    let mut tera = tera::Tera::new("")?;
+                    let res = tera.render_str(&content, &Context::new())?;
+
+                    illumos_image_builder::ensure::filestr(&res, 
+                        &target_path, 
+                        owner, group, mode, 
+                        illumos_image_builder::ensure::Create::Always,
+                    )?;
+                } else {
+                    illumos_image_builder::ensure::filestr(&content, 
+                        &target_path, 
+                        owner, group, mode, 
+                        illumos_image_builder::ensure::Create::Always,
+                    )?;
+                }
+            } else {
+                bail!("Either source or content must be defined")
+            }
+
+            Ok(())
+        },
+        Action::Perm(perm) => {
+            let target_path = Path::new(root).join(perm.path.strip_prefix("/")?);
+
+            let owner = if let Some(user) = perm.common.owner { 
+                illumos_image_builder::translate_uid(&user)? 
+            } else {
+                0
+            };
+
+            let group = if let Some(group) = perm.common.group {
+                illumos_image_builder::translate_gid(&group)?
+            } else {
+                0
+            };
+
+            let mode = if let Some(mode) = perm.common.mode {
+                mode
+            } else {
+                bail!("mode must be specified, not found for {}", perm.path.display())
+            };
+
+            illumos_image_builder::ensure::perms(&target_path, owner, group, mode)?;
+
+            Ok(())
+        },
         Action::Ips(ips_actions) => {
             for action in ips_actions.actions {
                 run_ips_action(root, action)?;
             }
             Ok(())
         },
-        Action::SeedSmf => todo!(),
+        Action::SeedSmf(smf) => {
+            let debug = smf.debug;
+            let apply_site = smf.apply_site;
+
+            let current_zone = zone::current()?;
+
+            let repo_tmpdir = if &current_zone == "global" {
+                Path::new(root).parent().unwrap_or(Path::new("/tmp")).join("config")
+            } else {
+                Path::new(ZONEMETA_NGZ_PATH).to_path_buf()
+            };
+
+            let svccfg_path = if &current_zone == "global" {
+                format!("{}/usr/sbin/svccfg", root)
+            } else {
+                format!("/usr/sbin/svccfg")
+            };
+
+            illumos_image_builder::seed_smf(&svccfg_path, 
+                &repo_tmpdir, 
+                Path::new(root), 
+                debug, apply_site)
+        },
     }
 }
 
 pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
+    info!("Running {}", action);
     match action {
         IpsActions::InitializeImage => {
             illumos_image_builder::pkg(&[

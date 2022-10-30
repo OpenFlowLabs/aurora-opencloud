@@ -15,3 +15,5 @@ serde_json = "1.0.83"
 url = "2.2.2"
 uuid = "1.1.2"
 miette = { version="4.7.1", features=["fancy"]}
+fs_extra = "1.2.0"
+zone = {git="https://github.com/oxidecomputer/zone.git"}

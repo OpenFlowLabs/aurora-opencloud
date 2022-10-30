@@ -22,7 +22,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let _log_guard = init_slog_logging(false)?;
+    let _log_guard = init_slog_logging(false, true)?;
 
     let cli: Cli = Cli::parse();
 

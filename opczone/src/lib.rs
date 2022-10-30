@@ -14,6 +14,16 @@ pub use util::*;
 
 use common::*;
 
+pub fn get_zone(zonename: &str) -> Result<zone::Zone> {
+    let zones = zone::Adm::list()?;
+    for zone in zones {
+        if zone.name() == zonename {
+            return Ok(zone);
+        }
+    }
+    bail!("zone {} does not exist", zonename)
+}
+
 fn spawn_reader<T>(name: &str, stream: Option<T>) -> Option<std::thread::JoinHandle<()>>
 where
     T: Read + Send + 'static,

@@ -1,15 +1,15 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
-use common::init_slog_logging;
+use common::{init_slog_logging, info};
 use opczone::build::bundle::{BuildBundleKind, Bundle, BUILD_BUNDLE_IMAGE_PATH};
-use std::fs::read_dir;
+use opczone::build::run_action;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 struct Cli {}
 
 fn main() -> Result<()> {
-    let _log_guard = init_slog_logging(false)?;
+    let _log_guard = init_slog_logging(false, true)?;
 
     let _cli: Cli = Cli::parse();
 
@@ -18,16 +18,18 @@ fn main() -> Result<()> {
 
     // Load build Instructions
     let bundle = load_build_bundle(&build_bundle)?;
+    let bundle_audit = bundle.get_audit_info();
 
-    println!("Author: {:?}", bundle.document.author);
-    println!("Name: {:?}", bundle.document.author);
+    println!("Building Image {} by {}", &bundle.document.name, bundle.document.author.clone().unwrap_or("Anonymous".into()));
 
-    let paths = read_dir("/")?;
+    let actions = if bundle_audit.is_base_image() {
+        bundle.document.actions.clone()[1..].to_vec()
+    } else {
+        bundle.document.actions.clone()
+    };
 
-    println!("Zone contents");
-
-    for path in paths {
-        println!("Name: {}", path?.path().display())
+    for action in actions {
+        run_action("/", &bundle, action)?;
     }
 
     Ok(())

@@ -1,6 +1,6 @@
 use crate::{run, run_capture_stdout};
 use anyhow::Result;
-use common::{info, debug};
+use common::{debug};
 
 const DLADM_BIN: &str = "/usr/sbin/dladm";
 

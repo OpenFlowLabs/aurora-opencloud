@@ -3,6 +3,18 @@ use std::{fs::File, path::Path};
 use crate::machine::Payload;
 use anyhow::{bail, Result};
 
+/// Get the zones dataset name from the mounts
+pub fn get_zone_dataset(zonepath: &str) -> Result<String> {
+
+    for mnt in common::illumos::mounts()? {
+        if &mnt.mount_point == zonepath {
+            return Ok(mnt.special);
+        }
+    }
+
+    bail!("No dataset found for mountpoint {}", zonepath)
+}
+
 /// Gets the parent dataset of the zones zonepath.
 /// Usually this is the zones pool on smartos or
 /// the zones dataset on other illumos distributions
