@@ -28,8 +28,10 @@ fn main() -> Result<()> {
         bundle.document.actions.clone()
     };
 
+    let zonename = zone::current()?;
+
     for action in actions {
-        run_action("/", &bundle, action)?;
+        run_action("/", &zonename, &bundle, action)?;
     }
 
     Ok(())

@@ -33,7 +33,7 @@ script = '''
 cd ${CARGO_MAKE_CRATE_TARGET_DIRECTORY}
 rm -rf manifests ${REPO_NAME} repository ${COMPONENT_NAME}.p5p
 mkdir manifests
-pkgsend generate prototype | pkgfmt > manifests/${COMPONENT_NAME}.p5m.1
+pkgsend generate prototype | pkgfmt > manifests/${COMPONENT_NAME}.fmt
 pkgmogrify \
     -DCOMPONENT_NAME="${COMPONENT_NAME}" \
     -DCOMPONENT_FMRI="${COMPONENT_FMRI}" \
@@ -45,12 +45,12 @@ pkgmogrify \
     -DCONSOLIDATION="${CONSOLIDATION}" \
     -DCOMPONENT_LICENSE_FILE="${COMPONENT_LICENSE_FILE}" \
     -DCOMPONENT_LICENSE="${COMPONENT_LICENSE}" \
-    manifests/${COMPONENT_NAME}.p5m.1 ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/pkg/${COMPONENT_NAME}.mog | pkgfmt > manifests/${COMPONENT_NAME}.p5m.2
-pkgdepend generate -m -d prototype manifests/${COMPONENT_NAME}.p5m.2 | pkgfmt > manifests/${COMPONENT_NAME}.p5m.3
-pkgdepend resolve -m manifests/${COMPONENT_NAME}.p5m.3
-pkglint manifests/${COMPONENT_NAME}.p5m.3.res
+    manifests/${COMPONENT_NAME}.fmt ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/pkg/${COMPONENT_NAME}.p5m | pkgfmt > manifests/${COMPONENT_NAME}.mog
+pkgdepend generate -m -d prototype manifests/${COMPONENT_NAME}.mog | pkgfmt > manifests/${COMPONENT_NAME}.dep
+pkgdepend resolve -m manifests/${COMPONENT_NAME}.dep
+pkglint manifests/${COMPONENT_NAME}.res
 pkgrepo create ${REPO_NAME}
 pkgrepo -s ${REPO_NAME} set publisher/prefix=aurora-opencloud.org
-pkgsend -s ${REPO_NAME} publish -d prototype -d ${CARGO_MAKE_WORKING_DIRECTORY} -d ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY} manifests/${COMPONENT_NAME}.p5m.3.res
+pkgsend -s ${REPO_NAME} publish -d prototype -d ${CARGO_MAKE_WORKING_DIRECTORY} -d ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY} manifests/${COMPONENT_NAME}.res
 pkgrecv -s ${REPO_NAME} -a -d ${COMPONENT_NAME}.p5p ${COMPONENT_FMRI}
 '''

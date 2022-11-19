@@ -1,0 +1,19 @@
+[package]
+name = "imgbuild"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+common = { version = "0.1.0", path = "../common" }
+opczone = { version = "0.1.0", path = "../opczone" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2.2"
+uuid = "1.1"
+miette = { version="4.7.1", features=["fancy"]}
+fs_extra = "1.2"
+zone = {git="https://github.com/oxidecomputer/zone.git"}

@@ -30,9 +30,9 @@ impl slog::Drain for SimpleStdoutDrain {
         _values: &slog::OwnedKVList,
     ) -> std::result::Result<Self::Ok, Self::Err> {
         #[allow(unused_must_use)]
-        stdout().write_all(format!("{}\n", record.msg()).as_bytes()).map_err(ignore_error);
+        stdout().write_all(format!("{}\n", record.msg()).as_bytes()).map_err(ignore_error).unwrap();
         #[allow(unused_must_use)]
-        stdout().flush();
+        stdout().flush().unwrap();
         Ok(())
     }
 }

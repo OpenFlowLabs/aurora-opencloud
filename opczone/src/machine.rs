@@ -1,12 +1,15 @@
-use std::{collections::{HashMap, BTreeSet}, path::Path};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::Path,
+};
 
-use crate::{vmext::write_brand_config};
+use crate::brand::Brand;
+use crate::vmext::write_brand_config;
 use anyhow::Result;
 use common::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::brand::Brand;
 
 const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const ZONE_IDENT_LEN: usize = 6;
@@ -227,6 +230,33 @@ pub struct AddNicPayload {
     pub vlan_id: Option<i32>,
     pub vrrp_primary_ip: Option<String>,
     pub vrrp_vrid: Option<u8>,
+}
+
+impl Default for AddNicPayload {
+    fn default() -> Self {
+        Self {
+            allow_dhcp_spoofing: false,
+            allow_ip_spoofing: false,
+            allow_mac_spoofing: false,
+            allow_restricted_traffic: false,
+            allow_unfiltered_promisc: false,
+            blocked_outgoing_ports: None,
+            allowed_ips: None,
+            dhcp_server: false,
+            gateway: None,
+            interface: None,
+            ip: None,
+            mac: None,
+            model: None,
+            netmask: None,
+            network_uuid: None,
+            nic_tag: None,
+            primary: false,
+            vlan_id: None,
+            vrrp_primary_ip: None,
+            vrrp_vrid: None,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -661,17 +691,16 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         .set_path(Path::new("/zones").join(zone_uuid.to_string()))
         .set_max_lwps(Some(payload.max_lwps))
         .set_cpu_shares(Some(payload.cpu_shares));
-    
 
     if let Some(cpu_cap) = payload.cpu_cap {
-        let caps = zone::CappedCpu{
+        let caps = zone::CappedCpu {
             ncpus: cpu_cap as f64 / 100.0,
         };
         cfg.add_capped_cpu(&caps);
     }
 
     if payload.delegate_dataset {
-        let ds = zone::Dataset{
+        let ds = zone::Dataset {
             name: format!("/zones/{}/data", zone_uuid.to_string()),
         };
         cfg.add_dataset(&ds);
@@ -686,12 +715,12 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
                 None
             };
 
-            let f = zone::Fs{ 
-                ty: fs.fs_type.clone(), 
-                dir: fs.target.clone(), 
-                special: fs.source.clone(), 
-                raw: raw, 
-                options: fs.options.clone(), 
+            let f = zone::Fs {
+                ty: fs.fs_type.clone(),
+                dir: fs.target.clone(),
+                special: fs.source.clone(),
+                raw: raw,
+                options: fs.options.clone(),
             };
             cfg.add_fs(&f);
         }
@@ -706,7 +735,6 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         cfg.get_global().set_limitpriv(privset);
     }
 
-    
     let capped_memory = if let Some(mut max_physical_memory) = &payload.max_physical_memory {
         if max_physical_memory < payload.ram {
             if payload.brand == Brand::Propolis || payload.brand == Brand::Bhyve {
@@ -720,8 +748,8 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         payload.ram
     };
 
-    let mut mem_cap = zone::CappedMemory{ 
-        physical: Some(format!("{}M", (capped_memory as f64 / 1024.0).to_string())), 
+    let mut mem_cap = zone::CappedMemory {
+        physical: Some(format!("{}M", (capped_memory as f64 / 1024.0).to_string())),
         ..Default::default()
     };
 
@@ -738,8 +766,8 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
     disk_payload.uuid = zone_uuid;
 
     for nic in &disk_payload.nics {
-        let mut nic_opts = zone::Net{ 
-            physical: nic.interface.clone(), 
+        let mut nic_opts = zone::Net {
+            physical: nic.interface.clone(),
             ..Default::default()
         };
 
@@ -749,10 +777,10 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         if let Some(gateway) = nic.gateway.clone() {
             nic_opts.default_router = Some(gateway);
         }
-        
+
         cfg.add_net(&nic_opts);
     }
-    
+
     cfg.run()?;
 
     info!(target: "define_vm", "defining VM: {}", zone_uuid.to_string());

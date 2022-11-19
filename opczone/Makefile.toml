@@ -1,6 +1,52 @@
  
 extend = "../build/shared_makefile.toml"
 
+[tasks.dev_install]
+extend = "install_env"
+dependencies = ["build"]
+script_runner = "bash"
+script_extension = "bash"
+script_runner_args = ["-ex"]
+script = '''
+brand_dir="/usr/lib/brand"
+
+# image build brand
+sudo ln -sf ${build_dir}/opcimginstall ${brand_dir}/opczimage/install
+sudo ln -sf ${build_dir}/opcimguninstall ${brand_dir}/opczimage/uninstall
+sudo ln -sf ${build_dir}/opcimgstatechange ${brand_dir}/opczimage/statechange
+sudo ln -sf ${build_dir}/opcimgattach ${brand_dir}/opczimage/attach
+sudo ln -sf ${build_dir}/opcimgdetach ${brand_dir}/opczimage/detach
+sudo ln -sf ${build_dir}/opcimgquery ${brand_dir}/opczimage/query
+sudo ln -sf ${build_dir}/opcimgbuild ${brand_dir}/opczimage/build_runner
+
+# native zone
+sudo ln -sf ${build_dir}/opcimginstall ${brand_dir}/opcnative/install
+sudo ln -sf ${build_dir}/opcimguninstall ${brand_dir}/opcnative/uninstall
+sudo ln -sf ${build_dir}/opcimgstatechange ${brand_dir}/opcnative/statechange
+sudo ln -sf ${build_dir}/opcimgattach ${brand_dir}/opcnative/attach
+sudo ln -sf ${build_dir}/opcimgdetach ${brand_dir}/opcnative/detach
+sudo ln -sf ${build_dir}/opcimgquery ${brand_dir}/opcnative/query
+sudo ln -sf ${build_dir}/opcimgbuild ${brand_dir}/opcnative/build_runner
+
+# propolis
+sudo ln -sf ${build_dir}/opcimginstall ${brand_dir}/opcpropolis/install
+sudo ln -sf ${build_dir}/opcimguninstall ${brand_dir}/opcpropolis/uninstall
+sudo ln -sf ${build_dir}/opcimgstatechange ${brand_dir}/opcpropolis/statechange
+sudo ln -sf ${build_dir}/opcimgattach ${brand_dir}/opcpropolis/attach
+sudo ln -sf ${build_dir}/opcimgdetach ${brand_dir}/opcpropolis/detach
+sudo ln -sf ${build_dir}/opcimgquery ${brand_dir}/opcpropolis/query
+sudo ln -sf ${build_dir}/opcimgbuild ${brand_dir}/opcpropolis/build_runner
+
+# bhyve
+sudo ln -sf ${build_dir}/opcimginstall ${brand_dir}/opcbhyve/install
+sudo ln -sf ${build_dir}/opcimguninstall ${brand_dir}/opcbhyve/uninstall
+sudo ln -sf ${build_dir}/opcimgstatechange ${brand_dir}/opcbhyve/statechange
+sudo ln -sf ${build_dir}/opcimgattach ${brand_dir}/opcbhyve/attach
+sudo ln -sf ${build_dir}/opcimgdetach ${brand_dir}/opcbhyve/detach
+sudo ln -sf ${build_dir}/opcimgquery ${brand_dir}/opcbhyve/query
+sudo ln -sf ${build_dir}/opcimgbuild ${brand_dir}/opcbhyve/build_runner
+'''
+
 [tasks.package.env]
 "COMPONENT_NAME" = "opczone"
 "COMPONENT_FMRI" = "system/zones/brand/${COMPONENT_NAME}"
@@ -33,4 +79,10 @@ ${INSTALL} -D -m 755 ${build_dir}/opcimgquery ${brand_dir}/opczimage/query
 ${INSTALL} -D -m 755 ${build_dir}/opcimgbuild ${brand_dir}/opczimage/build_runner
 ${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/config.xml ${brand_dir}/opczimage/config.xml
 ${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opczimage/platform.xml ${brand_dir}/opczimage/platform.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcbhyve/config.xml ${brand_dir}/opcbhyve/config.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcbhyve/platform.xml ${brand_dir}/opcbhyve/platform.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcpropolis/config.xml ${brand_dir}/opcpropolis/config.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcpropolis/platform.xml ${brand_dir}/opcpropolis/platform.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcnative/config.xml ${brand_dir}/opcnative/config.xml
+${INSTALL} -D -m 755 ${CARGO_MAKE_WORKING_DIRECTORY}/brand/opcnative/platform.xml ${brand_dir}/opcnative/platform.xml
 '''

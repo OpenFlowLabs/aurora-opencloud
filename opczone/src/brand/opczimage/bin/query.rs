@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::{Parser, ArgEnum};
-use common::init_slog_logging;
 
 #[derive(ArgEnum, Debug, Clone)] // ArgEnum here
 #[clap(rename_all = "kebab_case")]
@@ -22,12 +21,16 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let _log_guard = init_slog_logging(false, true)?;
+
+    let zero = char::from(0);
 
     let cli: Cli = Cli::parse();
 
     match cli.command {
-        Command::Datasets => {},
+        Command::Datasets => {
+            print!("{}/vroot", &cli.zonepath);
+            print!("{}/root", &cli.zonepath);
+        },
         Command::Skip => {},
     } 
 

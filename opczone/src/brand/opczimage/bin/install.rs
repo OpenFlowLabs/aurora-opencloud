@@ -5,7 +5,7 @@ use illumos_image_builder::{dataset_clone, dataset_create, zfs_set};
 use opczone::{
     build::{bundle::{Bundle}, run_action},
     get_zonepath_parent_ds,
-    vmext::get_brand_config, brand::Brand,
+    vmext::get_brand_config, brand::Brand, dataset_create_with,
 };
 use std::{
     fs::DirBuilder,
@@ -24,7 +24,7 @@ struct Cli {
     #[clap(short = 'q')]
     quota: i32,
 
-    #[clap(long, default_value_t=Brand::Native)]
+    #[clap(long, default_value="native")]
     brand: Brand,
 
     #[clap(short = 't')]
@@ -69,8 +69,7 @@ fn main() -> Result<()> {
 
         //Run first IPS action to install base image
         if let Some(ips_action) = bundle.document.actions.first() {
-            let zone_root = format!("{}/root", &cli.zonepath);
-            run_action(&zone_root, &bundle, ips_action.clone())?;
+            run_action(&cli.zonepath, &cli.zonename, &bundle, ips_action.clone())?;
         }
 
         //Save image bundle inside the image with first IPS action removed
@@ -94,6 +93,7 @@ fn setup_dataset(
 
     let zone_dataset_name = format!("{}/{}", parent_dataset, zonename);
     let root_dataset_name = format!("{}/{}", zone_dataset_name, "root");
+    let vroot_dataset_name = format!("{}/{}", zone_dataset_name, "vroot");
 
     let quota_arg = format!("{}g", zonequota);
 
@@ -114,9 +114,13 @@ fn setup_dataset(
         let bundle = Bundle::new(&bundle_path).map_err(|err| anyhow!("{:?}", err))?;
         let audit_info = bundle.get_audit_info();
         if audit_info.is_base_image() {
-            dataset_create(&root_dataset_name, false)?;
-            zfs_set(&root_dataset_name, "devices", "off")?;
-            zfs_set(&root_dataset_name, "quota", &quota_arg)?;
+            dataset_create_with(&root_dataset_name, false, vec![
+                ("devices".to_string(), "off".to_string()),
+                ("quota".to_string(), quota_arg)
+            ].as_slice())?;
+            dataset_create_with(&vroot_dataset_name, false, vec![
+                ("mountpoint".to_string(), "none".to_string()),
+            ].as_slice())?;
         } else {
             //TODO: clone base image
             println!("Cloning the base image is not implemented yet");
@@ -135,8 +139,6 @@ fn setup_dataset(
 fn setup_zone_fs(zonename: &str, zonepath: &str, brand: Brand) -> Result<()> {
     let config_path = Path::new(zonepath).join("config");
     let meta_path = Path::new(zonepath).join("meta");
-    let zone_root = Path::new(zonepath).join("root");
-    let zone_tmp = zone_root.join("tmp");
 
     if !config_path.exists() {
         DirBuilder::new()
@@ -146,13 +148,6 @@ fn setup_zone_fs(zonename: &str, zonepath: &str, brand: Brand) -> Result<()> {
                 "unable to create zone config directory: {}",
                 zonename
             ))?;
-    }
-
-    if !zone_tmp.exists() {
-        DirBuilder::new()
-            .mode(0o1777)
-            .create(&zone_tmp)
-            .context(format!("unable to create zone tmp directory: {}", zonename))?;
     }
 
     if brand == Brand::Image {

@@ -8,6 +8,7 @@ members = [
   "nodeadmd",
   "vmadm",
   "imgadm",
+  "imgbuild",
   "opczone",
   "common"
 ]

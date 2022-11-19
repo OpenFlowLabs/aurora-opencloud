@@ -1,0 +1,47 @@
+#
+# This file and its contents are supplied under the terms of the
+# Common Development and Distribution License ("CDDL"), version 1.0.
+# You may only use this file in accordance with the terms of version
+# 1.0 of the CDDL.
+#
+# A full copy of the text of the CDDL should have accompanied this
+# source.  A copy of the CDDL is also available via the Internet at
+# http://www.illumos.org/license/CDDL.
+#
+
+#
+# Copyright 2022 OpenFlowLabs
+#
+
+set name=pkg.fmri value=pkg:/$(COMPONENT_FMRI)@$(IPS_COMPONENT_VERSION),$(BUILD_VERSION)
+set name=pkg.summary value="$(COMPONENT_SUMMARY)"
+set name=info.classification value="$(COMPONENT_CLASSIFICATION)"
+set name=info.upstream-url value=$(COMPONENT_PROJECT_URL)
+#set name=info.source-url value=$(COMPONENT_ARCHIVE_URL)
+set name=org.opensolaris.consolidation value=$(CONSOLIDATION)
+
+license $(COMPONENT_LICENSE_FILE) license='$(COMPONENT_LICENSE)'
+
+<transform dir -> drop>
+
+hardlink target=../opczimage/install path=usr/lib/brand/opcbhyve/install
+hardlink target=../opczimage/install path=usr/lib/brand/opcpropolis/install
+hardlink target=../opczimage/install path=usr/lib/brand/opcnative/install
+hardlink target=../opczimage/uninstall path=usr/lib/brand/opcbhyve/uninstall
+hardlink target=../opczimage/uninstall path=usr/lib/brand/opcpropolis/uninstall
+hardlink target=../opczimage/uninstall path=usr/lib/brand/opcnative/uninstall
+hardlink target=../opczimage/statechange path=usr/lib/brand/opcbhyve/statechange
+hardlink target=../opczimage/statechange path=usr/lib/brand/opcpropolis/statechange
+hardlink target=../opczimage/statechange path=usr/lib/brand/opcnative/statechange
+hardlink target=../opczimage/attach path=usr/lib/brand/opcbhyve/attach
+hardlink target=../opczimage/attach path=usr/lib/brand/opcpropolis/attach
+hardlink target=../opczimage/attach path=usr/lib/brand/opcnative/attach
+hardlink target=../opczimage/detach path=usr/lib/brand/opcbhyve/detach
+hardlink target=../opczimage/detach path=usr/lib/brand/opcpropolis/detach
+hardlink target=../opczimage/detach path=usr/lib/brand/opcnative/detach
+hardlink target=../opczimage/query path=usr/lib/brand/opcbhyve/query
+hardlink target=../opczimage/query path=usr/lib/brand/opcpropolis/query
+hardlink target=../opczimage/query path=usr/lib/brand/opcnative/query
+hardlink target=../opczimage/build_runner path=usr/lib/brand/opcbhyve/build_runner
+hardlink target=../opczimage/build_runner path=usr/lib/brand/opcpropolis/build_runner
+hardlink target=../opczimage/build_runner path=usr/lib/brand/opcnative/build_runner

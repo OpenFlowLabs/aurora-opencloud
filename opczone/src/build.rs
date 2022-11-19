@@ -1,13 +1,12 @@
 use anyhow::{Result, bail};
 use common::info;
-use illumos_image_builder::{dataset_create, zfs_set};
 use tera::Context;
 use std::{
     collections::HashMap,
     path::{PathBuf, Path},
 };
 
-use crate::{get_zone_dataset, brand::{ZONEMETA_NGZ_PATH}};
+use crate::{dataset_create_with, get_zone_vroot_dataset};
 use self::bundle::Bundle;
 
 /*
@@ -36,7 +35,6 @@ pub enum Action {
     Volume(Volume),
     Remove(#[knuffel(argument)] String),
     ExtractTarball(#[knuffel(argument)] String),
-    InitializeDevfs,
     AssembleFile(AssembleFile),
     Group(#[knuffel(argument)] String),
     User(
@@ -48,7 +46,6 @@ pub enum Action {
     File(File),
     Perm(Dir),
     Ips(Ips),
-    SeedSmf(Smf),
 }
 
 impl std::fmt::Display for Action {
@@ -57,7 +54,6 @@ impl std::fmt::Display for Action {
             Action::Volume(v) => write!(f, "Action Volume: {}", v.name),
             Action::Remove(r) => write!(f, "Action Remove: {}", r),
             Action::ExtractTarball(t) => write!(f, "Action Extract Tarball: {}", t),
-            Action::InitializeDevfs => write!(f, "Action Initialize DevFs"),
             Action::AssembleFile(fil) => write!(f, "Action Assemble File: {}", fil.output.display()),
             Action::Group(g) => write!(f, "Action Ensure Group: {}", g),
             Action::User(u, _) => write!(f, "Action Ensure User: {}", u),
@@ -66,7 +62,6 @@ impl std::fmt::Display for Action {
             Action::File(fil) => write!(f, "Action Ensure File: {}", fil.path.display()),
             Action::Perm(p) => write!(f, "Action Ensure Permissions: {}", p.path.display()),
             Action::Ips(_) => Ok(()),
-            Action::SeedSmf(_smf) => write!(f, "Action seeding SMF repo"),
         }
     }
 }
@@ -255,7 +250,14 @@ pub struct Smf {
     pub apply_site: bool,
 }
 
-pub fn run_action(root: &str, bundle: &Bundle, action: Action) -> Result<()> {
+pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Action) -> Result<()> {
+    let root_string = if zonename == &zone::current()? {
+        zonepath.clone().to_string()
+    } else {
+        format!("{}/root", zonepath)
+    };
+
+    let root = root_string.as_str();
     info!("Running {}", action);
     match action {
         Action::Volume(volume) => {
@@ -264,19 +266,23 @@ pub fn run_action(root: &str, bundle: &Bundle, action: Action) -> Result<()> {
                 panic!("Volume creation is only supported inside a zone")
             }
 
-            let zds = get_zone_dataset("/")?;
+            let zds = get_zone_vroot_dataset(zonename)?;
 
             let vds = format!("{}/{}", zds, volume.name);
 
-            dataset_create(&vds, false)?;
+            let mountpoint = if let Some(p) = volume.mountpoint {
+                ("mountpoint".to_string(), p.clone())
+            } else {
+                ("mountpoint".to_string(), format!("/{}", volume.name))
+            };
 
-            for prop in volume.properties {
-                zfs_set(&vds, &prop.name, &prop.value)?;
-            }
+            let mut props: Vec<(String,String)> = volume.properties.into_iter().map(|p| {
+                (p.name, p.value)
+            }).collect();
 
-            if let Some(p) = volume.mountpoint {
-                zfs_set(&vds, "mountpoint", &p)?;
-            }
+            props.push(mountpoint);
+
+            dataset_create_with(&vds, false, props.as_slice())?;
 
             Ok(())
         },
@@ -299,9 +305,6 @@ pub fn run_action(root: &str, bundle: &Bundle, action: Action) -> Result<()> {
                 root,
             ], Some(&[]))?;
             Ok(())
-        },
-        Action::InitializeDevfs => {
-            crate::run(&["/usr/sbin/devfsadm", "-r", root], None)
         },
         Action::AssembleFile(assemble) => {
             let source_path = bundle.get_file(assemble.dir)?;
@@ -520,29 +523,6 @@ pub fn run_action(root: &str, bundle: &Bundle, action: Action) -> Result<()> {
                 run_ips_action(root, action)?;
             }
             Ok(())
-        },
-        Action::SeedSmf(smf) => {
-            let debug = smf.debug;
-            let apply_site = smf.apply_site;
-
-            let current_zone = zone::current()?;
-
-            let repo_tmpdir = if &current_zone == "global" {
-                Path::new(root).parent().unwrap_or(Path::new("/tmp")).join("config")
-            } else {
-                Path::new(ZONEMETA_NGZ_PATH).to_path_buf()
-            };
-
-            let svccfg_path = if &current_zone == "global" {
-                format!("{}/usr/sbin/svccfg", root)
-            } else {
-                format!("/usr/sbin/svccfg")
-            };
-
-            illumos_image_builder::seed_smf(&svccfg_path, 
-                &repo_tmpdir, 
-                Path::new(root), 
-                debug, apply_site)
         },
     }
 }

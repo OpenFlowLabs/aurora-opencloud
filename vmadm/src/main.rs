@@ -7,9 +7,6 @@ use common::{init_slog_logging, info, debug, trace};
 use opczone::{build::bundle::Bundle, machine::define_vm, brand::build_zonecontrol_gz_path};
 use std::io::stdin;
 
-const RUNNER_BRAND_PATH: &str = "/usr/lib/brand/opczimage/build_runner";
-const RUNNER_IN_ZONE_PATH_RELATIVE: &str = "build_runner";
-const RUNNER_IN_ZONE_PATH_ABSOLUTE: &str = "/build_runner";
 const ZONEADM: &str = "/usr/sbin/zoneadm";
 const ZLOGIN: &str = "/usr/sbin/zlogin";
 
@@ -26,14 +23,6 @@ enum Subcommands {
     Create {
         #[clap(short)]
         filename: Option<String>,
-
-        /// Define a build bundle to make avaialble in the zone. This also sets up build assistance tools
-        #[clap(short)]
-        build_bundle_fmri: Option<String>,
-
-        ///Export the created zone directly as image
-        #[clap(short)]
-        export_to_image: bool,
     },
     /// Delete the VM with the specified UUID. The VM and any associated
     /// storage including zvols and the zone filesystem will be removed.
@@ -76,73 +65,7 @@ fn main() -> Result<()> {
                 serde_json::from_reader(stdin())?
             };
 
-            let quota = cfg.quota.clone();
-
-            let conf = define_vm(cfg)?;
-            let zonename = conf.uuid.to_string();
-
-            let mut zoneadm = zone::Adm::new(&zonename);
-
-            // We use opczone::run here to install the zone because the zone package gets all output before 
-            // returning it to stdout. opczone::run shows progress immediatly
-            if let Some(b) = build_bundle_fmri {
-                opczone::run(&[
-                    ZONEADM,
-                    "-z",
-                    &zonename,
-                    "install",
-                    "-q",
-                    &quota.to_string(),
-                    "-b",
-                    &b,
-                ], None)?;
-            } else {
-                opczone::run(&[
-                    ZONEADM,
-                    "-z",
-                    &zonename,
-                    "install",
-                    "-q",
-                    &quota.to_string(),
-                ], None)?;
-            }
-
-            //Boot Zone
-            zoneadm.boot()?;
-            trace!("all zones on the system: {:#?}", zone::Adm::list());
-            debug!("trying to get zonepath of {}", zonename);
-            let zone = opczone::get_zone(&zonename)?;
-
-            //Copy Builder into zone
-            let zone_path = zone.path();
-            debug!("Zone path: {}", zone_path.display());
-            let gz_runner_in_zone_path = zone_path.join("root").join(RUNNER_IN_ZONE_PATH_RELATIVE);
-
-            info!("copying build_runner into zone {}", zone.name());
-            debug!("{} -> {}", RUNNER_BRAND_PATH, gz_runner_in_zone_path.display());
-            fs_extra::file::copy(RUNNER_BRAND_PATH, &gz_runner_in_zone_path, &fs_extra::file::CopyOptions{
-                skip_exist: true,
-                ..Default::default()
-            })?;
-
-            //Run Builder inside zone with zlogin
-            //we again use opczone::run to get all the output
-            opczone::run(&[
-                ZLOGIN,
-                //"-Q",
-                &zonename,
-                RUNNER_IN_ZONE_PATH_ABSOLUTE,
-            ], None)?;
-
-            //Cleanup Bundle
-            let bundle_zonecontrol_path = build_zonecontrol_gz_path(&zonename).join("build_bundle");
-            let cleanup_items = vec![bundle_zonecontrol_path.as_path(), &gz_runner_in_zone_path];
-            fs_extra::remove_items(&cleanup_items)?;
-
-            //TODO: Run export if export_to_image is set
-            if export_to_image {
-                
-            }
+            println!("Zone: {:#?}", cfg);
         }
         Subcommands::Delete { _uuid } => todo!(),
         Subcommands::List {

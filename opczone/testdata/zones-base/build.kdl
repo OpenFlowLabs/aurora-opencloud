@@ -28,48 +28,4 @@ ips {
     purge-history
 }
 
-seed-smf
-
-initialize-devfs
-
-symlink "/etc/svc/profile/generic.xml" "/etc/svc/profile/generic_limited_net.xml" {
-    owner "root"
-    group "root"
-}
-
-symlink "/etc/svc/profile/inetd_services.xml" "/etc/svc/profile/inetd_generic.xml" {
-    owner "root"
-    group "root"
-}
-
-symlink "/etc/svc/profile/platform.xml" "/etc/svc/profile/platform_none.xml" {
-    owner "root"
-    group "root"
-}
-
-symlink "/etc/svc/profile/name_service.xml" "/etc/svc/profile/ns_dns.xml" {
-    owner "root"
-    group "root"
-}
-
 user "root" "NP"
-
-file "/etc/inet/hosts" {
-    src "files/hosts"
-    owner "root"
-    group "root"
-    mode 644
-}
-
-file "/etc/nodename" {
-    content "unknown\n"
-    owner "root"
-    group "root"
-    mode 644
-}
-
-file "/etc/resolv.conf" {
-    owner "root"
-    group "root"
-    mode 644
-}
