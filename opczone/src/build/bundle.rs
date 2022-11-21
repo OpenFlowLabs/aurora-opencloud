@@ -1,7 +1,7 @@
-use std::path::{PathBuf, Path};
+use super::{Action, Document};
 use miette::{IntoDiagnostic, Report, WrapErr};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
-use super::{Document, Action};
 
 type Result<T> = std::result::Result<T, BundleError>;
 
@@ -22,6 +22,7 @@ pub enum BundleError {
 enum BuildBundleType {
     BaseImage,
     Image,
+    #[allow(dead_code)]
     VM,
 }
 
@@ -94,7 +95,9 @@ impl Bundle {
     pub fn get_file<P: AsRef<Path>>(&self, relative_file_path: P) -> Result<PathBuf> {
         let full_path = self.get_files_path().join(relative_file_path.as_ref());
         if !full_path.exists() {
-            return Err(BundleError::FileDoesExistsErr(relative_file_path.as_ref().to_string_lossy().to_string()));
+            return Err(BundleError::FileDoesExistsErr(
+                relative_file_path.as_ref().to_string_lossy().to_string(),
+            ));
         }
 
         Ok(full_path)
@@ -113,7 +116,7 @@ impl Bundle {
     }
 
     pub fn save_to<P: AsRef<Path>>(&self, target: P) -> Result<()> {
-        let options = fs_extra::dir::CopyOptions{ 
+        let options = fs_extra::dir::CopyOptions {
             overwrite: true,
             copy_inside: true,
             ..Default::default()

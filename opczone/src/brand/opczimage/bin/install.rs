@@ -1,11 +1,12 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use common::init_slog_logging;
-use illumos_image_builder::{dataset_clone, dataset_create, zfs_set};
+use illumos_image_builder::dataset_clone;
 use opczone::{
-    build::{bundle::{Bundle}, run_action},
-    get_zonepath_parent_ds,
-    vmext::get_brand_config, brand::Brand, dataset_create_with,
+    brand::Brand,
+    build::{bundle::Bundle, run_action},
+    dataset_create_with, get_zonepath_parent_ds,
+    vmext::get_brand_config,
 };
 use std::{
     fs::DirBuilder,
@@ -15,22 +16,22 @@ use std::{
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short = 'z')]
+    #[arg(short = 'z')]
     zonename: String,
 
-    #[clap(short = 'R')]
+    #[arg(short = 'R')]
     zonepath: String,
 
-    #[clap(short = 'q')]
+    #[arg(short = 'q')]
     quota: i32,
 
-    #[clap(long, default_value="native")]
+    #[arg(long, default_value = "native")]
     brand: Brand,
 
-    #[clap(short = 't')]
+    #[arg(short = 't')]
     image_uuid: Option<uuid::Uuid>,
 
-    #[clap(short = 'b')]
+    #[arg(short = 'b')]
     build_bundle: Option<PathBuf>,
 }
 
@@ -114,13 +115,20 @@ fn setup_dataset(
         let bundle = Bundle::new(&bundle_path).map_err(|err| anyhow!("{:?}", err))?;
         let audit_info = bundle.get_audit_info();
         if audit_info.is_base_image() {
-            dataset_create_with(&root_dataset_name, false, vec![
-                ("devices".to_string(), "off".to_string()),
-                ("quota".to_string(), quota_arg)
-            ].as_slice())?;
-            dataset_create_with(&vroot_dataset_name, false, vec![
-                ("mountpoint".to_string(), "none".to_string()),
-            ].as_slice())?;
+            dataset_create_with(
+                &root_dataset_name,
+                false,
+                vec![
+                    ("devices".to_string(), "off".to_string()),
+                    ("quota".to_string(), quota_arg),
+                ]
+                .as_slice(),
+            )?;
+            dataset_create_with(
+                &vroot_dataset_name,
+                false,
+                vec![("mountpoint".to_string(), "none".to_string())].as_slice(),
+            )?;
         } else {
             //TODO: clone base image
             println!("Cloning the base image is not implemented yet");

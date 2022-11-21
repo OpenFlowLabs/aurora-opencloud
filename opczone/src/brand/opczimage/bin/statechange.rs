@@ -1,22 +1,26 @@
 use std::{fs::DirBuilder, os::unix::fs::DirBuilderExt};
 
 use anyhow::{bail, Context, Result};
-use clap::{ArgEnum, Parser};
-use common::{init_slog_logging, info, debug};
+use clap::{Parser, ValueEnum};
+use common::{debug, init_slog_logging};
 use opczone::{
-    brand::{ZONE_CMD_BOOT, ZONE_CMD_HALT, ZONE_CMD_READY, ZONE_CMD_UNMOUNT, ZONE_STATE_DOWN, build_zonecontrol_gz_path, build_zonemeta_gz_path},
-    dladm::{
-        create_vnic, does_aggr_exist, does_etherstub_exist, does_phys_exist, show_one_vnic,
-        show_vnic, CreateVNICArgs, CreateVNICProps, does_vnic_exist,
+    brand::{
+        build_zonecontrol_gz_path, build_zonemeta_gz_path, ZONE_CMD_BOOT, ZONE_CMD_HALT,
+        ZONE_CMD_READY, ZONE_CMD_UNMOUNT, ZONE_STATE_DOWN,
     },
-    machine::{OnDiskPayload},
+    dladm::{
+        create_vnic, does_aggr_exist, does_etherstub_exist, does_phys_exist, does_vnic_exist,
+        show_one_vnic, CreateVNICArgs, CreateVNICProps,
+    },
+    machine::OnDiskPayload,
     vmext::{get_brand_config, write_brand_config},
 };
 use thiserror::Error;
 
 const DEFAULT_MTU: i32 = 1500;
 
-#[derive(ArgEnum, Debug, Clone)] // ArgEnum here
+#[allow(unused_variables)]
+#[derive(ValueEnum, Debug, Clone)] // ArgEnum here
 #[clap(rename_all = "kebab_case")]
 enum StateSubCMD {
     Pre,
@@ -25,22 +29,22 @@ enum StateSubCMD {
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(value_parser, arg_enum)]
+    #[arg(value_enum)]
     subcommand: StateSubCMD,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     zonename: String,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     zonepath: String,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     currentstate: i32,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     statecommand: i32,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     mount_to_diagnose: Option<String>,
 }
 
@@ -56,13 +60,13 @@ fn main() -> Result<()> {
             match cli.statecommand {
                 ZONE_CMD_READY => {
                     //pre-ready
-                    info!("Pre-ready");
+                    debug!("Pre-ready");
                     setup_zone_helper_directories(&cli.zonename, &cli.zonepath)?;
                     cfg = setup_net(&cli.zonename, &cli.zonepath, &cfg)?;
                 }
                 ZONE_CMD_HALT => {
                     //pre-halt
-                    info!("Pre-halt");
+                    debug!("Pre-halt");
                     cleanup_net(&cli.zonename, &cli.zonepath, &cfg)?;
                 }
                 _ => {}
@@ -71,7 +75,7 @@ fn main() -> Result<()> {
         StateSubCMD::Post => match cli.statecommand {
             ZONE_CMD_READY => {
                 //post-ready
-                info!("Post-ready");
+                debug!("Post-ready");
                 setup_fw(&cli.zonename, &cli.zonepath, &cfg)?;
             }
             ZONE_CMD_BOOT => {
@@ -97,7 +101,8 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn setup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<OnDiskPayload> {
+#[allow(unused_variables)]
+fn setup_net(zonename: &str, zonepath: &str, cfg: &OnDiskPayload) -> Result<OnDiskPayload> {
     let mut new_payload = cfg.clone();
     for (idx, mut nic) in cfg.nics.clone().into_iter().enumerate() {
         /*
@@ -142,7 +147,7 @@ fn setup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<OnD
                 CreateVNICArgs::Temporary,
                 CreateVNICArgs::Link(nic.nic_tag.clone()),
             ];
-            let mut nic_opts: Vec<CreateVNICProps> = vec![
+            let nic_opts: Vec<CreateVNICProps> = vec![
                 CreateVNICProps::Zone(zonename.clone().to_owned()),
                 CreateVNICProps::Mtu(DEFAULT_MTU),
             ];
@@ -201,24 +206,29 @@ enum StateChangeError {
     NoBackingInterface(String),
 }
 
-fn setup_fw(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
+#[allow(unused_variables)]
+fn setup_fw(zonename: &str, zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
     Ok(())
 }
 
-fn setup_cpu_baseline(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
+#[allow(unused_variables)]
+fn setup_cpu_baseline(zonename: &str, zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
     Ok(())
 }
 
-fn cleanup_net(zonename: &str, _zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
+#[allow(unused_variables)]
+fn cleanup_net(zonename: &str, zonepath: &str, cfg: &OnDiskPayload) -> Result<()> {
     Ok(())
 }
 
-fn cleanup_mount(zonename: &str, _zonepath: &str, mount_to_diagnose: Option<String>) -> Result<()> {
+#[allow(unused_variables)]
+fn cleanup_mount(zonename: &str, zonepath: &str, mount_to_diagnose: Option<String>) -> Result<()> {
     Ok(())
 }
 
 // This function runs in the global zone to make sure the directories the zone will need are setup
-fn setup_zone_helper_directories(zonename: &str, _zonepath: &str) -> Result<()> {
+#[allow(unused_variables)]
+fn setup_zone_helper_directories(zonename: &str, zonepath: &str) -> Result<()> {
     let zonecontrol_path = build_zonecontrol_gz_path(zonename);
     //mkdir -m755 -p /var/zonecontrol/${ZONENAME}
     if !zonecontrol_path.exists() {
@@ -239,10 +249,7 @@ fn setup_zone_helper_directories(zonename: &str, _zonepath: &str) -> Result<()> 
             .mode(0o755)
             .recursive(true)
             .create(&zonemeta_path)
-            .context(format!(
-                "unable to create zone meta directory {}",
-                zonename
-            ))?;
+            .context(format!("unable to create zone meta directory {}", zonename))?;
     }
 
     Ok(())

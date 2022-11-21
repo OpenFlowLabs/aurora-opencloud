@@ -1,13 +1,13 @@
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use common::info;
-use tera::Context;
 use std::{
     collections::HashMap,
-    path::{PathBuf, Path},
+    path::{Path, PathBuf},
 };
+use tera::Context;
 
-use crate::{dataset_create_with, get_zone_vroot_dataset};
 use self::bundle::Bundle;
+use crate::{dataset_create_with, get_zone_vroot_dataset};
 
 /*
  * Hard-coded user ID and group ID for root:
@@ -54,10 +54,17 @@ impl std::fmt::Display for Action {
             Action::Volume(v) => write!(f, "Action Volume: {}", v.name),
             Action::Remove(r) => write!(f, "Action Remove: {}", r),
             Action::ExtractTarball(t) => write!(f, "Action Extract Tarball: {}", t),
-            Action::AssembleFile(fil) => write!(f, "Action Assemble File: {}", fil.output.display()),
+            Action::AssembleFile(fil) => {
+                write!(f, "Action Assemble File: {}", fil.output.display())
+            }
             Action::Group(g) => write!(f, "Action Ensure Group: {}", g),
             Action::User(u, _) => write!(f, "Action Ensure User: {}", u),
-            Action::Symlink(l) => write!(f, "Action Ensure Symlink: {} -> {}", l.target.display(), l.link.display()),
+            Action::Symlink(l) => write!(
+                f,
+                "Action Ensure Symlink: {} -> {}",
+                l.target.display(),
+                l.link.display()
+            ),
             Action::Dir(d) => write!(f, "Action Ensure Directory: {}", d.path.display()),
             Action::File(fil) => write!(f, "Action Ensure File: {}", fil.path.display()),
             Action::Perm(p) => write!(f, "Action Ensure Permissions: {}", p.path.display()),
@@ -82,7 +89,7 @@ impl std::fmt::Display for IpsProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut v = vec![];
         for (key, value) in &self.properties {
-            v.push(format!("{}={}",key, value))
+            v.push(format!("{}={}", key, value))
         }
 
         if v.len() > 1 {
@@ -261,7 +268,6 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
     info!("Running {}", action);
     match action {
         Action::Volume(volume) => {
-
             if zone::current()? == "global".to_string() {
                 panic!("Volume creation is only supported inside a zone")
             }
@@ -276,16 +282,18 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
                 ("mountpoint".to_string(), format!("/{}", volume.name))
             };
 
-            let mut props: Vec<(String,String)> = volume.properties.into_iter().map(|p| {
-                (p.name, p.value)
-            }).collect();
+            let mut props: Vec<(String, String)> = volume
+                .properties
+                .into_iter()
+                .map(|p| (p.name, p.value))
+                .collect();
 
             props.push(mountpoint);
 
             dataset_create_with(&vds, false, props.as_slice())?;
 
             Ok(())
-        },
+        }
         Action::Remove(path) => {
             let rpath = Path::new(root);
             let path = Path::new(&path).strip_prefix("/")?;
@@ -294,18 +302,21 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             fs_extra::remove_items(&paths)?;
 
             Ok(())
-        },
+        }
         Action::ExtractTarball(tarball) => {
             let full_tarball_path = bundle.get_file(&tarball)?;
-            crate::run(&[
-                "/usr/sbin/tar",
-                "xzeEp@/f",
-                &full_tarball_path.to_string_lossy(),
-                "-C",
-                root,
-            ], Some(&[]))?;
+            crate::run(
+                &[
+                    "/usr/sbin/tar",
+                    "xzeEp@/f",
+                    &full_tarball_path.to_string_lossy(),
+                    "-C",
+                    root,
+                ],
+                Some(&[]),
+            )?;
             Ok(())
-        },
+        }
         Action::AssembleFile(assemble) => {
             let source_path = bundle.get_file(assemble.dir)?;
             let output_path = Path::new(root).join(assemble.output.strip_prefix("/")?);
@@ -345,20 +356,22 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
                 }
             }
 
-            illumos_image_builder::ensure::filestr(&outstr, &output_path, 
-                ROOT, 
-                ROOT, 
-                0o644, 
-                illumos_image_builder::ensure::Create::Always
+            illumos_image_builder::ensure::filestr(
+                &outstr,
+                &output_path,
+                ROOT,
+                ROOT,
+                0o644,
+                illumos_image_builder::ensure::Create::Always,
             )?;
 
             Ok(())
-        },
+        }
         Action::Group(_group) => bail!("Group creation not yet supported"),
         Action::User(user, pw) => {
             /*
-            * Read the shadow file:
-            */
+             * Read the shadow file:
+             */
             let path = Path::new(root).join("etc/shadow");
 
             let orig = illumos_image_builder::ShadowFile::load(&path)?;
@@ -373,21 +386,17 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             } else {
                 info!("updating shadow file");
                 copy.write(&path)?;
-                illumos_image_builder::ensure::perms(&path, 
-                    ROOT, 
-                    ROOT, 
-                    0o400
-                )?;
+                illumos_image_builder::ensure::perms(&path, ROOT, ROOT, 0o400)?;
             }
 
             Ok(())
-        },
+        }
         Action::Symlink(link) => {
             let target_path = Path::new(root).join(&link.target);
             let link_path = Path::new(root).join(&link.link);
 
-            let owner = if let Some(user) = link.owner { 
-                illumos_image_builder::translate_uid(&user)? 
+            let owner = if let Some(user) = link.owner {
+                illumos_image_builder::translate_uid(&user)?
             } else {
                 0
             };
@@ -401,13 +410,12 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             illumos_image_builder::ensure::symlink(&link_path, &target_path, owner, group)?;
 
             Ok(())
-        },
+        }
         Action::Dir(dir) => {
-
             let target_path = Path::new(root).join(dir.path.strip_prefix("/")?);
 
-            let owner = if let Some(user) = dir.common.owner { 
-                illumos_image_builder::translate_uid(&user)? 
+            let owner = if let Some(user) = dir.common.owner {
+                illumos_image_builder::translate_uid(&user)?
             } else {
                 0
             };
@@ -427,12 +435,12 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             illumos_image_builder::ensure::directory(&target_path, owner, group, mode)?;
 
             Ok(())
-        },
+        }
         Action::File(file) => {
             let target_path = Path::new(root).join(file.path.strip_prefix("/")?);
 
-            let owner = if let Some(user) = file.common.owner { 
-                illumos_image_builder::translate_uid(&user)? 
+            let owner = if let Some(user) = file.common.owner {
+                illumos_image_builder::translate_uid(&user)?
             } else {
                 0
             };
@@ -456,17 +464,23 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
                     let mut tera = tera::Tera::new("")?;
                     let res = tera.render_str(&template, &Context::new())?;
 
-                    illumos_image_builder::ensure::filestr(&res, 
-                        &target_path, 
-                        owner, group, mode, 
+                    illumos_image_builder::ensure::filestr(
+                        &res,
+                        &target_path,
+                        owner,
+                        group,
+                        mode,
                         illumos_image_builder::ensure::Create::Always,
                     )?;
                 } else {
                     let source_path = bundle.get_file(&src)?;
 
-                    illumos_image_builder::ensure::file(&source_path, 
-                        &target_path, 
-                        owner, group, mode, 
+                    illumos_image_builder::ensure::file(
+                        &source_path,
+                        &target_path,
+                        owner,
+                        group,
+                        mode,
                         illumos_image_builder::ensure::Create::Always,
                     )?;
                 }
@@ -475,15 +489,21 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
                     let mut tera = tera::Tera::new("")?;
                     let res = tera.render_str(&content, &Context::new())?;
 
-                    illumos_image_builder::ensure::filestr(&res, 
-                        &target_path, 
-                        owner, group, mode, 
+                    illumos_image_builder::ensure::filestr(
+                        &res,
+                        &target_path,
+                        owner,
+                        group,
+                        mode,
                         illumos_image_builder::ensure::Create::Always,
                     )?;
                 } else {
-                    illumos_image_builder::ensure::filestr(&content, 
-                        &target_path, 
-                        owner, group, mode, 
+                    illumos_image_builder::ensure::filestr(
+                        &content,
+                        &target_path,
+                        owner,
+                        group,
+                        mode,
                         illumos_image_builder::ensure::Create::Always,
                     )?;
                 }
@@ -492,12 +512,12 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             }
 
             Ok(())
-        },
+        }
         Action::Perm(perm) => {
             let target_path = Path::new(root).join(perm.path.strip_prefix("/")?);
 
-            let owner = if let Some(user) = perm.common.owner { 
-                illumos_image_builder::translate_uid(&user)? 
+            let owner = if let Some(user) = perm.common.owner {
+                illumos_image_builder::translate_uid(&user)?
             } else {
                 0
             };
@@ -511,19 +531,22 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             let mode = if let Some(mode) = perm.common.mode {
                 mode
             } else {
-                bail!("mode must be specified, not found for {}", perm.path.display())
+                bail!(
+                    "mode must be specified, not found for {}",
+                    perm.path.display()
+                )
             };
 
             illumos_image_builder::ensure::perms(&target_path, owner, group, mode)?;
 
             Ok(())
-        },
+        }
         Action::Ips(ips_actions) => {
             for action in ips_actions.actions {
                 run_ips_action(root, action)?;
             }
             Ok(())
-        },
+        }
     }
 }
 
@@ -531,41 +554,37 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
     info!("Running {}", action);
     match action {
         IpsActions::InitializeImage => {
-            illumos_image_builder::pkg(&[
-                "image-create",
-                "--full",
-                root,
-            ])
-        },
-        IpsActions::InstallPackages(pkgs) => {
-            illumos_image_builder::pkg_install(root, pkgs.packages.iter().map(|s| s.as_str()).collect::<Vec<&str>>().as_slice())
-        },
-        IpsActions::InstallOptionals => bail!("install optionals is a not supported operation right now"),
+            illumos_image_builder::pkg(&["image-create", "-F", "-z", root])
+        }
+        IpsActions::InstallPackages(pkgs) => illumos_image_builder::pkg_install(
+            root,
+            pkgs.packages
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>()
+                .as_slice(),
+        ),
+        IpsActions::InstallOptionals => {
+            bail!("install optionals is a not supported operation right now")
+        }
         IpsActions::SetProperty(ips_properties) => {
             for (prop_name, prop_value) in ips_properties.properties {
-                illumos_image_builder::pkg(&[
-                        "-R",
-                        root,
-                        "set-property",
-                        &prop_name,
-                        &prop_value,
-                    ])?;
+                illumos_image_builder::pkg(&["-R", root, "set-property", &prop_name, &prop_value])?;
             }
-            
+
             Ok(())
-        },
+        }
         IpsActions::SetPublisher(pub_props) => {
             let mut args = vec![
-                "-R".to_owned(), 
+                "-R".to_owned(),
                 root.to_string(),
                 "set-publisher".to_owned(),
-                ];
+            ];
             for (idx, uri) in pub_props.uris.into_iter().enumerate() {
                 if idx == 0 {
                     args.push("-O".to_owned());
                     args.push(uri);
                 } else {
-                    
                     args.push("-g".to_owned());
                     args.push(uri);
                 }
@@ -573,47 +592,41 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
 
             args.push(pub_props.publisher);
 
-            illumos_image_builder::pkg(args.iter().map(|s| s.as_str()).collect::<Vec<&str>>().as_slice())
-        },
-        IpsActions::ApprovePublisherCA(_) => bail!("approve ca is a not supported operation right now"),
-        IpsActions::UninstallPackages(pkgs) => {
-            illumos_image_builder::pkg_uninstall(root, pkgs.packages.iter().map(|s| s.as_str()).collect::<Vec<&str>>().as_slice())
-        },
+            illumos_image_builder::pkg(
+                args.iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<&str>>()
+                    .as_slice(),
+            )
+        }
+        IpsActions::ApprovePublisherCA(_) => {
+            bail!("approve ca is a not supported operation right now")
+        }
+        IpsActions::UninstallPackages(pkgs) => illumos_image_builder::pkg_uninstall(
+            root,
+            pkgs.packages
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>()
+                .as_slice(),
+        ),
         IpsActions::SetVariant(variant_props) => {
             for (variant_name, variant_value) in variant_props.properties {
-                illumos_image_builder::pkg_ensure_variant(
-                    root,
-                    &variant_name,
-                    &variant_value,
-                )?;
+                illumos_image_builder::pkg_ensure_variant(root, &variant_name, &variant_value)?;
             }
 
             Ok(())
-        },
+        }
         IpsActions::SetFacet(facet_prop) => {
             for (facet_name, facet_value) in facet_prop.properties {
-                illumos_image_builder::pkg_ensure_facet(
-                    root, 
-                    &facet_name, 
-                    &facet_value,
-                )?;
+                illumos_image_builder::pkg_ensure_facet(root, &facet_name, &facet_value)?;
             }
 
             Ok(())
-        },
-        IpsActions::PurgeHistory => {
-            illumos_image_builder::pkg(&[
-                "-R",
-                root,
-                "purge-history"
-            ])
-        },
+        }
+        IpsActions::PurgeHistory => illumos_image_builder::pkg(&["-R", root, "purge-history"]),
         IpsActions::SetMediator(mediator_props) => {
-            let mut args = vec![
-                "-R".to_owned(), 
-                root.to_string(),
-                "set-mediator".to_owned(),    
-            ];
+            let mut args = vec!["-R".to_owned(), root.to_string(), "set-mediator".to_owned()];
             if let Some(imple) = mediator_props.implementation {
                 args.push("-I".to_owned());
                 args.push(imple);
@@ -626,8 +639,13 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
 
             args.push(mediator_props.name);
 
-            illumos_image_builder::pkg(args.iter().map(|s| s.as_str()).collect::<Vec<&str>>().as_slice())
-        },
+            illumos_image_builder::pkg(
+                args.iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<&str>>()
+                    .as_slice(),
+            )
+        }
     }
 }
 

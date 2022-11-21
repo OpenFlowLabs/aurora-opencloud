@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
-use common::{init_slog_logging, info};
+use common::init_slog_logging;
 use opczone::build::bundle::{BuildBundleKind, Bundle, BUILD_BUNDLE_IMAGE_PATH};
 use opczone::build::run_action;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,11 @@ fn main() -> Result<()> {
     let bundle = load_build_bundle(&build_bundle)?;
     let bundle_audit = bundle.get_audit_info();
 
-    println!("Building Image {} by {}", &bundle.document.name, bundle.document.author.clone().unwrap_or("Anonymous".into()));
+    println!(
+        "Building Image {} by {}",
+        &bundle.document.name,
+        bundle.document.author.clone().unwrap_or("Anonymous".into())
+    );
 
     let actions = if bundle_audit.is_base_image() {
         bundle.document.actions.clone()[1..].to_vec()
@@ -38,6 +42,7 @@ fn main() -> Result<()> {
 }
 
 struct BuildBundleSearchResult {
+    #[allow(dead_code)]
     kind: BuildBundleKind,
     path: PathBuf,
 }

@@ -9,10 +9,10 @@ use std::process::Command;
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short = 'z')]
+    #[arg(short = 'z')]
     zonename: String,
 
-    #[clap(short = 'R')]
+    #[arg(short = 'R')]
     zonepath: String,
 }
 

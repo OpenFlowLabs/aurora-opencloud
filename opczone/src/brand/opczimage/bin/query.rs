@@ -1,7 +1,7 @@
 use anyhow::Result;
-use clap::{Parser, ArgEnum};
+use clap::{Parser, ValueEnum};
 
-#[derive(ArgEnum, Debug, Clone)] // ArgEnum here
+#[derive(ValueEnum, Debug, Clone)] // ArgEnum here
 #[clap(rename_all = "kebab_case")]
 enum Command {
     Datasets,
@@ -10,29 +10,26 @@ enum Command {
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     zonename: String,
 
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     zonepath: String,
 
-    #[clap(value_parser, value_enum, default_value_t=Command::Skip)]
+    #[arg(value_enum, default_value_t=Command::Skip)]
     command: Command,
 }
 
 fn main() -> Result<()> {
-
-    let zero = char::from(0);
-
     let cli: Cli = Cli::parse();
 
     match cli.command {
         Command::Datasets => {
             print!("{}/vroot", &cli.zonepath);
             print!("{}/root", &cli.zonepath);
-        },
-        Command::Skip => {},
-    } 
+        }
+        Command::Skip => {}
+    }
 
     Ok(())
 }

@@ -5,10 +5,10 @@ use std::{fs::copy, path::Path};
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short = 'z')]
+    #[arg(short = 'z')]
     zonename: String,
 
-    #[clap(short = 'R')]
+    #[arg(short = 'R')]
     zonepath: String,
 }
 
