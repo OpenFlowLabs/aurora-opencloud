@@ -1177,7 +1177,8 @@ dependencies = [
  "clap 4.0.19",
  "common",
  "fs_extra",
- "miette",
+ "kdl",
+ "miette 4.7.1",
  "opczone",
  "serde",
  "serde_json",
@@ -1265,6 +1266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kdl"
+version = "4.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "062c875482ccb676fd40c804a40e3824d4464c18c364547456d1c8e8e951ae47"
+dependencies = [
+ "miette 5.4.1",
+ "nom 7.1.1",
+ "thiserror",
+]
+
+[[package]]
 name = "knuffel"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1273,7 +1285,7 @@ dependencies = [
  "base64",
  "chumsky",
  "knuffel-derive",
- "miette",
+ "miette 4.7.1",
  "thiserror",
  "unicode-width",
 ]
@@ -1374,7 +1386,7 @@ checksum = "1c90329e44f9208b55f45711f9558cec15d7ef8295cc65ecd6d4188ae8edc58c"
 dependencies = [
  "atty",
  "backtrace",
- "miette-derive",
+ "miette-derive 4.7.1",
  "once_cell",
  "owo-colors",
  "supports-color",
@@ -1387,10 +1399,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "miette"
+version = "5.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a24c4b4063c21e037dffb4de388ee85e400bff299803aba9513d9c52de8116b"
+dependencies = [
+ "miette-derive 5.4.1",
+ "once_cell",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
 name = "miette-derive"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b5bc45b761bcf1b5e6e6c4128cd93b84c218721a8d9b894aa0aff4ed180174c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "miette-derive"
+version = "5.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "827d18edee5d43dc309eb0ac565f2b8e2fdc89b986b2d929e924a0f6e7f23835"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1423,6 +1458,12 @@ name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
+
+[[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
@@ -1475,12 +1516,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nom"
+version = "7.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
+]
+
+[[package]]
 name = "nom_pem"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46345232a84add363a2b3bf214777cf13443f6dab781161aafbdadb8b1f0bd2d"
 dependencies = [
- "nom",
+ "nom 4.2.3",
 ]
 
 [[package]]
@@ -1553,7 +1604,7 @@ dependencies = [
  "illumos-image-builder",
  "knuffel",
  "log",
- "miette",
+ "miette 4.7.1",
  "pretty_assertions",
  "rand 0.8.5",
  "serde",
@@ -3257,7 +3308,7 @@ dependencies = [
  "clap 3.2.16",
  "common",
  "fs_extra",
- "miette",
+ "miette 4.7.1",
  "opczone",
  "serde",
  "serde_json",

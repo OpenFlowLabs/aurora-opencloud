@@ -1,9 +1,11 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use common::{debug, info, init_slog_logging};
 use opczone::brand::Brand;
 use opczone::machine::AddNicPayload;
 use opczone::{brand::build_zonecontrol_gz_path, machine::define_vm};
+use std::fs::{DirBuilder, File};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use url::Url;
 
@@ -30,6 +32,14 @@ enum Commands {
     Init {
         /// Optionally define the Path where the new image should be initialized assumes CWD by default
         location: Option<PathBuf>,
+
+        /// With what name to initialize the image
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Define the author of the image already during initialization
+        #[arg(short, long)]
+        author: Option<String>,
     },
     Build {
         #[arg(short, long)]
@@ -62,7 +72,46 @@ fn main() -> Result<()> {
     //TODO: extract some definitions of networking from some
     // textfiles and setup the zone with enough data automatically
     match cli.commands {
-        Commands::Init { location } => {}
+        Commands::Init {
+            location,
+            name,
+            author,
+        } => {
+            let location = std::fs::canonicalize(if let Some(location) = location {
+                if !location.exists() {
+                    debug!("Creating bundle directory {}", &location.display());
+                    DirBuilder::new()
+                        .recursive(true)
+                        .create(&location)
+                        .context("could not create bundle directory")?;
+                }
+
+                location
+            } else {
+                Path::new(".").to_path_buf()
+            })?;
+
+            let mut doc = kdl::KdlDocument::new();
+            if let Some(name) = name {
+                let mut name_node = kdl::KdlNode::new("name");
+                name_node.push(kdl::KdlEntry::new(name));
+                doc.nodes_mut().push(name_node);
+            }
+
+            if let Some(author) = author {
+                let mut author_node = kdl::KdlNode::new("author");
+                author_node.push(kdl::KdlEntry::new(author));
+                doc.nodes_mut().push(author_node);
+            }
+
+            debug!("location is: {}", &location.display());
+
+            debug!("writing build.kdl");
+            let mut build_kdl = File::create(&location.join("build.kdl"))
+                .with_context(|| "could not write build.kdl")?;
+            build_kdl.write_all(&doc.to_string().as_bytes())?;
+        }
+
         Commands::Build {
             nictag,
             quota,
