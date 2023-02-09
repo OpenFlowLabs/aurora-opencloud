@@ -749,7 +749,7 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
     };
 
     let mut mem_cap = zone::CappedMemory {
-        physical: Some(format!("{}M", (capped_memory as f64 / 1024.0).to_string())),
+        physical: Some(format!("{}M", capped_memory.to_string())),
         ..Default::default()
     };
 

@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use common::{debug, info, init_slog_logging};
 use opczone::brand::Brand;
+use opczone::get_zone_dataset;
+use opczone::image::{export_image_as_dataset_format, export_zone_as_oci_format};
 use opczone::machine::AddNicPayload;
 use opczone::{brand::build_zonecontrol_gz_path, machine::define_vm};
+use std::fmt::Display;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -18,11 +21,29 @@ const ZLOGIN: &str = "/usr/sbin/zlogin";
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// Tell the Cli the location of the build bundle. Assumes CWD as default
-    build_bundle: Option<String>,
-
     #[command(subcommand)]
     commands: Commands,
+}
+
+#[derive(ValueEnum, Clone)]
+enum ExportType {
+    Dataset,
+    OCI,
+}
+
+impl Default for ExportType {
+    fn default() -> Self {
+        Self::Dataset
+    }
+}
+
+impl Display for ExportType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExportType::Dataset => write!(f, "dataset image"),
+            ExportType::OCI => write!(f, "oci image"),
+        }
+    }
 }
 
 /// All build commands
@@ -57,6 +78,17 @@ enum Commands {
         #[arg(short, long)]
         /// Define the IP address the Build zone will use.
         ip: Option<String>,
+
+        #[arg(short, long)]
+        /// Define the default router
+        gateway: Option<String>,
+
+        #[arg(short = 'e', long, default_value = "dataset")]
+        /// To which image format to export into
+        image_export_type: ExportType,
+
+        /// Tell the Cli the location of the build bundle. Assumes CWD as default
+        build_bundle: Option<String>,
     },
     Publish {
         /// Tell the utility where to publish the image to. Use oci:// for OCI registry endpoints
@@ -117,6 +149,9 @@ fn main() -> Result<()> {
             quota,
             ram,
             ip,
+            gateway,
+            build_bundle,
+            image_export_type,
         } => {
             let mut cfg = opczone::machine::CreatePayload {
                 brand: Brand::Image,
@@ -137,6 +172,7 @@ fn main() -> Result<()> {
                 nics.push(AddNicPayload {
                     nic_tag: Some(nictag),
                     ip,
+                    gateway,
                     ..Default::default()
                 });
 
@@ -150,7 +186,7 @@ fn main() -> Result<()> {
 
             let mut zoneadm = zone::Adm::new(&zonename);
 
-            let bundle = std::fs::canonicalize(if let Some(build_bundle) = cli.build_bundle {
+            let bundle = std::fs::canonicalize(if let Some(build_bundle) = build_bundle {
                 Path::new(build_bundle.as_str()).to_path_buf()
             } else {
                 Path::new(".").to_path_buf()
@@ -178,9 +214,10 @@ fn main() -> Result<()> {
             debug!("Zone path: {}", zone_path.display());
 
             //Add Volume root to delegated dataset
+            let zone_ds_name = get_zone_dataset(&zone_path.as_os_str().to_string_lossy())?;
             let mut zonecfg_zone = zone::Config::new(&zonename);
             zonecfg_zone.add_dataset(&zone::Dataset {
-                name: format!("{}/vroot", zone_path.as_os_str().to_string_lossy()),
+                name: format!("{}/vroot", zone_ds_name),
             });
             let out = zonecfg_zone.run()?;
             info!("Updating zone config: {}", out);
@@ -220,12 +257,14 @@ fn main() -> Result<()> {
 
             let output_dir = std::env::current_dir()?;
 
-            opczone::image::convert_zone_to_image(
-                &zonename,
-                &output_dir,
-                opczone::image::ImageType::Dataset,
-            )?;
+            let image_uuid = opczone::image::convert_zone_to_image(&zonename)?;
+
+            match image_export_type {
+                ExportType::Dataset => export_image_as_dataset_format(image_uuid, output_dir)?,
+                ExportType::OCI => export_zone_as_oci_format(zone, output_dir)?,
+            }
         }
+        #[allow(unused_variables)]
         Commands::Publish { endpoint } => {}
     }
     Ok(())

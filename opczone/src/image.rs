@@ -1,5 +1,5 @@
-use crate::get_zone_dataset;
-use common::info;
+use crate::{get_zone_dataset, get_zonepath_parent_ds};
+use common::{debug, info};
 use std::process::{Command, Stdio};
 use std::{fs::File, path::Path};
 use std::{thread, time};
@@ -49,11 +49,7 @@ impl std::fmt::Display for ImageType {
     }
 }
 
-pub fn convert_zone_to_image<P: AsRef<Path>>(
-    zonename: &str,
-    output_dir: P,
-    image_type: ImageType,
-) -> Result<()> {
+pub fn convert_zone_to_image(zonename: &str) -> Result<uuid::Uuid> {
     // Make sure zone is shutdown
     let zone = crate::get_zone(zonename)?;
     match zone.state() {
@@ -65,7 +61,13 @@ pub fn convert_zone_to_image<P: AsRef<Path>>(
         }
         zone::State::Running => {
             info!("Shutting down zone {}", zonename);
-            crate::run(&[ZONEADM, "-z", zonename, "shutdown"], None)?;
+            match crate::run(&[ZONEADM, "-z", zonename, "shutdown"], None) {
+                Ok(_) => {}
+                Err(_) => {
+                    info!("Unable to shutdown zone ignoring init and halting zone");
+                    crate::run(&[ZONEADM, "-z", zonename, "halt"], None)?;
+                }
+            }
         }
         s => {
             return Err(ImageError::UnableToExport(
@@ -75,36 +77,61 @@ pub fn convert_zone_to_image<P: AsRef<Path>>(
         }
     }
 
-    // if it is dataset type image
-    match image_type {
-        ImageType::Dataset => {
-            export_zone_as_dataset_format(zone, output_dir)?;
-        }
-        ImageType::OCI => {
-            // run oci export and write oci compliant image files in output directory
-            export_zone_as_oci_format(zone, output_dir)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn export_zone_as_dataset_format<P: AsRef<Path>>(zone: zone::Zone, output_dir: P) -> Result<()> {
-    // snapshot zone dataset recursive
-    // zfs send dataset into output directory
     let zds = get_zone_dataset(&zone.path().to_string_lossy())?;
     let snap_name = format!("{}@final", &zds);
     info!("Snaphotting {}", &zds);
     crate::run(&[ZFS, "snap", "-r", &snap_name], None)?;
 
-    let file_name = output_dir.as_ref().join("image_zfs.gz");
+    let datasets = crate::run_capture_stdout(
+        &[
+            ZFS, "list", "-t", "snapshot", "-r", "-H", "-o", "name", &zds,
+        ],
+        None,
+    )?;
 
-    let file = File::create(file_name.clone())?;
+    let image_uuid = uuid::Uuid::new_v4();
+
+    let pds = get_zonepath_parent_ds(&zone.path().to_string_lossy())?;
+
+    let image_base_ds = format!("{}/{}", pds, image_uuid.hyphenated().to_string());
+
+    let mut image_datasets: Vec<String> = vec![];
+
+    for ds in datasets.split_terminator("\n").collect::<Vec<&str>>() {
+        let target_ds_name = ds.replace(&zds, &image_base_ds).replace("@final", "");
+        image_datasets.insert(0, target_ds_name.clone());
+        debug!("Cloning {} -> {}", ds, &target_ds_name);
+        crate::run(&[ZFS, "clone", ds, &target_ds_name], None)?;
+    }
+
+    for ds in image_datasets {
+        crate::run(&[ZFS, "promote", &ds], None)?;
+    }
+
+    Ok(image_uuid)
+}
+
+pub fn export_image_as_dataset_format<P: AsRef<Path>>(
+    image_uuid: uuid::Uuid,
+    output_dir: P,
+) -> Result<()> {
+    // zfs send dataset into output directory
+    let image_path = format!("/zones/{}", image_uuid.as_hyphenated().to_string());
+
+    let image_ds = get_zone_dataset(&image_path)?;
+    let snap_name = format!("{}@final", &image_ds);
+
+    let image_filename = format!("{}.zfs.gz", image_uuid.as_hyphenated().to_string());
+
+    let file_path = output_dir.as_ref().join(&image_filename);
+
+    let file = File::create(&file_path)?;
 
     info!(
         "Exporting zone to zfs image file {} with gzip compression",
-        file_name.display()
+        file_path.display()
     );
+
     let zfs_send = Command::new(ZFS)
         .arg("send")
         .arg("-R")
@@ -131,6 +158,6 @@ fn export_zone_as_dataset_format<P: AsRef<Path>>(zone: zone::Zone, output_dir: P
 }
 
 #[allow(unused_variables)]
-fn export_zone_as_oci_format<P: AsRef<Path>>(zone: zone::Zone, output_dir: P) -> Result<()> {
+pub fn export_zone_as_oci_format<P: AsRef<Path>>(zone: zone::Zone, output_dir: P) -> Result<()> {
     todo!()
 }

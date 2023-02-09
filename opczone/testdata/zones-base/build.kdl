@@ -4,9 +4,6 @@ name "zones/base"
 ips {
     initialize-image
     set-publisher "openindiana.org" "https://pkg.openindiana.org/hipster"
-    set-variant opensolaris.zone="nonglobal"
-    set-variant opensolaris.imagetype="full"
-
     install-packages "entire" "minimal_install"
 
     install-packages "vim"\
