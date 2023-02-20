@@ -1,8 +1,6 @@
 # Installation images
 
 ## Image Types
-- Volume
-- Dataset
 - IPS
 
 ## Building Images
@@ -227,3 +225,9 @@ To import an image into the system it is enough to specify the FMRI
 ```bash
 imgadm import img://images.openindiana.org/hipster
 ```
+
+## Examples
+
+```kdl
+
+
