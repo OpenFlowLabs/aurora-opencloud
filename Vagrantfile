@@ -79,4 +79,5 @@ Vagrant.configure("2") do |config|
 target-dir = "/export/home/vagrant/.cargo/target"
 EOF
   SHELL
+
 end
