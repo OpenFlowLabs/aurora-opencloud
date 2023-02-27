@@ -24,6 +24,12 @@ specs {
 	memory "16G"
 }
 
+// This gets saved with the vm and can be used as storage to give humans informations
+metadata key="value" {
+	keyint 1
+	keystr "value"
+}
+
 // bHyve is the default
 (bhyve)vm {
 	(vioscsi)disk "vda" {

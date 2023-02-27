@@ -1,6 +1,15 @@
 use crate::{run, run_capture_stdout};
-use anyhow::Result;
-use common::{debug};
+use common::debug;
+use miette::Diagnostic;
+use thiserror::Error;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum DladmError {
+    #[error(transparent)]
+    OPCError(#[from] crate::OPCZoneError),
+}
+
+type Result<T> = miette::Result<T, DladmError>;
 
 const DLADM_BIN: &str = "/usr/sbin/dladm";
 
@@ -165,7 +174,7 @@ fn show(class: &str) -> Result<Vec<LinkInfo>> {
             }
             LinkInfo {
                 class: class,
-                name: line[0].to_owned()
+                name: line[0].to_owned(),
             }
         })
         .collect())
@@ -191,7 +200,10 @@ pub fn create_vnic(
     args: Option<Vec<CreateVNICArgs>>,
     opts: Option<Vec<CreateVNICProps>>,
 ) -> Result<()> {
-    debug!("Calling dladm with args: {:#?} and options {:#?}", &args, &opts);
+    debug!(
+        "Calling dladm with args: {:#?} and options {:#?}",
+        &args, &opts
+    );
     let mut dladm_args: Vec<String> = vec![DLADM_BIN.to_owned(), "create-vnic".to_owned()];
     if let Some(opts) = opts {
         dladm_args.push("-p".to_owned());
@@ -241,5 +253,5 @@ pub fn create_vnic(
 
     dladm_args.push(name.to_owned());
 
-    run(dladm_args.as_slice(), None)
+    Ok(run(dladm_args.as_slice(), None)?)
 }

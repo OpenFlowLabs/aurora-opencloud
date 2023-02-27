@@ -16,3 +16,4 @@ log = { version = "0.4" }
 atty = "0.2"
 anyhow = "1"
 thiserror = "1"
+miette = "4.7.1"

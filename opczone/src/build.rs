@@ -1,3 +1,5 @@
+use self::bundle::Bundle;
+use crate::{dataset_create_with, get_zone_vroot_dataset};
 use anyhow::{bail, Result};
 use common::info;
 use std::{
@@ -5,9 +7,17 @@ use std::{
     path::{Path, PathBuf},
 };
 use tera::Context;
+use thiserror::Error;
 
-use self::bundle::Bundle;
-use crate::{dataset_create_with, get_zone_vroot_dataset};
+#[derive(Debug, Error)]
+pub enum BuildError {
+    #[error("{0} not yet supported")]
+    NotYetSupported(String),
+    #[error("mode must be specified, not found for {0}")]
+    NoModeSpecified(String),
+    #[error(transparent)]
+    AnyHowError(#[from] anyhow::Error),
+}
 
 /*
  * Hard-coded user ID and group ID for root:
@@ -367,7 +377,7 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
 
             Ok(())
         }
-        Action::Group(_group) => bail!("Group creation not yet supported"),
+        Action::Group(_group) => Err(BuildError::NotYetSupported(String::from("Group")).into()),
         Action::User(user, pw) => {
             /*
              * Read the shadow file:
@@ -531,10 +541,9 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             let mode = if let Some(mode) = perm.common.mode {
                 mode
             } else {
-                bail!(
-                    "mode must be specified, not found for {}",
-                    perm.path.display()
-                )
+                return Err(
+                    BuildError::NoModeSpecified(perm.path.to_string_lossy().to_string()).into(),
+                );
             };
 
             illumos_image_builder::ensure::perms(&target_path, owner, group, mode)?;
@@ -565,7 +574,7 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
                 .as_slice(),
         ),
         IpsActions::InstallOptionals => {
-            bail!("install optionals is a not supported operation right now")
+            Err(BuildError::NotYetSupported(String::from("install optionals")).into())
         }
         IpsActions::SetProperty(ips_properties) => {
             for (prop_name, prop_value) in ips_properties.properties {
@@ -600,7 +609,7 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
             )
         }
         IpsActions::ApprovePublisherCA(_) => {
-            bail!("approve ca is a not supported operation right now")
+            Err(BuildError::NotYetSupported(String::from("approving CA")).into())
         }
         IpsActions::UninstallPackages(pkgs) => illumos_image_builder::pkg_uninstall(
             root,

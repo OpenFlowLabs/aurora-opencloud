@@ -1,24 +1,31 @@
 /*
  * Copyright 2021 Oxide Computer Company
+ * Copyright 2023 OpenFlowLabs GmbH
  */
 
-use anyhow::{bail, Result};
-use io::ErrorKind::NotFound;
 use io::Read;
+use miette::Diagnostic;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
+use std::path::Path;
+use thiserror::Error;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum IllumosError {
+    #[error("could not open {0}: {1}")]
+    IOError(String, #[source] std::io::Error),
+    #[error(transparent)]
+    TIOError(#[from] std::io::Error),
+}
+
+type Result<T> = miette::Result<T, IllumosError>;
 
 fn read_file(p: &str) -> Result<Option<String>> {
-    let f = match fs::File::open(p) {
-        Ok(f) => f,
-        Err(e) => {
-            match e.kind() {
-                NotFound => return Ok(None),
-                _ => bail!("open \"{}\": {}", p, e),
-            };
-        }
-    };
+    if !Path::new(p).exists() {
+        return Ok(None);
+    }
+    let f = fs::File::open(p).map_err(|e| IllumosError::IOError(p.to_string(), e))?;
     let mut r = io::BufReader::new(f);
     let mut out = String::new();
     r.read_to_string(&mut out)?;

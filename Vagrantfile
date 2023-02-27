@@ -52,7 +52,7 @@ Vagrant.configure("2") do |config|
         # Should we ever support `--discard` option, we need to switch to VDI
         # virtual disk format first.
         #v.customize ["storageattach", :id, "--storagectl", "SATA Controller", "--port", 0, "--discard", "on"]
-        config.vm.synced_folder ".", "/vagrant_mounted"
+
     end
 
     config.vm.provider :libvirt do |libvirt|
@@ -63,7 +63,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     set -ex
-    pkg install system/library/gcc-4-runtime build-essential system/library/g++-4-runtime jq
+    pkg install system/library/gcc-10-runtime build-essential system/library/g++-10-runtime system/library/gcc-10-compat-links jq
     mkdir /ws
     chown vagrant:vagrant /ws
     zfs create -o mountpoint=/zones rpool/zones

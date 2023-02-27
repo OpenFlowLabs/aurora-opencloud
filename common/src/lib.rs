@@ -1,19 +1,29 @@
 pub mod illumos;
 
-use std::io::{stdout, Write};
-
-pub use anyhow::{anyhow, bail, Result};
+use log::SetLoggerError;
 pub use log::{debug, error, info, trace, warn};
+use miette::Diagnostic;
 use slog::{Drain, Logger};
 use slog_async::Async;
 use slog_scope::{set_global_logger, GlobalLoggerGuard};
 use slog_syslog::Facility;
 use slog_term::{CompactFormat, TermDecorator};
+use std::io::{stdout, Write};
 pub use thiserror::Error;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum LogError {
+    #[error(transparent)]
+    SlogError(#[from] std::io::Error),
+    #[error(transparent)]
+    SetLoggerError(#[from] SetLoggerError),
+}
+
+type Result<T> = miette::Result<T, LogError>;
 
 pub static AUTHORIZATION_HEADER: &str = "authorization";
 
-fn ignore_error<E>(_err: E) -> std::result::Result<() ,slog::Never> {
+fn ignore_error<E>(_err: E) -> std::result::Result<(), slog::Never> {
     Ok(())
 }
 
@@ -30,7 +40,10 @@ impl slog::Drain for SimpleStdoutDrain {
         _values: &slog::OwnedKVList,
     ) -> std::result::Result<Self::Ok, Self::Err> {
         #[allow(unused_must_use)]
-        stdout().write_all(format!("{}\n", record.msg()).as_bytes()).map_err(ignore_error).unwrap();
+        stdout()
+            .write_all(format!("{}\n", record.msg()).as_bytes())
+            .map_err(ignore_error)
+            .unwrap();
         #[allow(unused_must_use)]
         stdout().flush().unwrap();
         Ok(())
@@ -39,7 +52,7 @@ impl slog::Drain for SimpleStdoutDrain {
 
 impl SimpleStdoutDrain {
     fn new() -> Self {
-        SimpleStdoutDrain{}
+        SimpleStdoutDrain {}
     }
 }
 

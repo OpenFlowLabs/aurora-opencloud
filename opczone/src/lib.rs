@@ -6,13 +6,34 @@ pub mod machine;
 mod util;
 pub mod vmext;
 
-use anyhow::{bail, Context, Result};
+use miette::Diagnostic;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use thiserror::Error;
 
 pub use util::*;
 
 use common::*;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum OPCZoneError {
+    #[error(transparent)]
+    ZoneError(#[from] zone::ZoneError),
+    #[error(transparent)]
+    ProcessError(#[from] std::io::Error),
+    #[error("could not spawn process {0}: {1}")]
+    ProcessErrorWithContext(String, #[source] std::io::Error),
+    #[error("process {0} failed")]
+    ProcessOutputError(String),
+    #[error("process {0} failed with: {1}")]
+    ProcessOutputErrorWithOutput(String, String),
+    #[error("zone {0} does not exist")]
+    ZoneDoesNotExist(String),
+    #[error(transparent)]
+    FromUTF8Error(#[from] std::string::FromUtf8Error),
+}
+
+type Result<T> = miette::Result<T, OPCZoneError>;
 
 pub fn get_zone(zonename: &str) -> Result<zone::Zone> {
     let zones = zone::Adm::list()?;
@@ -21,7 +42,7 @@ pub fn get_zone(zonename: &str) -> Result<zone::Zone> {
             return Ok(zone);
         }
     }
-    bail!("zone {} does not exist", zonename)
+    Err(OPCZoneError::ZoneDoesNotExist(zonename.clone().into()))
 }
 
 fn spawn_reader<T>(name: &str, stream: Option<T>) -> Option<std::thread::JoinHandle<()>>
@@ -109,10 +130,12 @@ pub fn run_with_stdin<S: AsRef<str>>(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().context(format!(
-        "could not spawn process {}",
-        args[0].clone().to_owned()
-    ))?;
+    let mut child = cmd.spawn().map_err(|e| {
+        OPCZoneError::ProcessErrorWithContext(
+            format!("could not spawn process {}", args[0].clone().to_owned()),
+            e,
+        )
+    })?;
     let mut child_stdin = child.stdin.take().unwrap();
     std::thread::spawn(move || {
         child_stdin.write_all(stdin.as_bytes()).unwrap();
@@ -129,10 +152,10 @@ pub fn run_with_stdin<S: AsRef<str>>(
     }
 
     match child.wait() {
-        Err(e) => Err(e.into()),
+        Err(e) => Err(OPCZoneError::ProcessError(e)),
         Ok(es) => {
             if !es.success() {
-                bail!("exec {:?}: failed {:?}", &args, &es)
+                Err(OPCZoneError::ProcessOutputError(args.join(" ")))
             } else {
                 Ok(())
             }
@@ -149,9 +172,9 @@ pub fn run<S: AsRef<str>>(args: &[S], env: Option<&[(S, S)]>) -> Result<()> {
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd
-        .spawn()
-        .context(format!("could not spawn process {}", args[0]))?;
+    let mut child = cmd.spawn().map_err(|e| {
+        OPCZoneError::ProcessErrorWithContext(format!("could not spawn process {}", args[0]), e)
+    })?;
 
     let readout = spawn_reader("O", child.stdout.take());
     let readerr = spawn_reader("E", child.stderr.take());
@@ -167,7 +190,7 @@ pub fn run<S: AsRef<str>>(args: &[S], env: Option<&[(S, S)]>) -> Result<()> {
         Err(e) => Err(e.into()),
         Ok(es) => {
             if !es.success() {
-                bail!("exec {:?}: failed {:?}", &args, &es)
+                Err(OPCZoneError::ProcessOutputError(args.join(" ")))
             } else {
                 Ok(())
             }
@@ -184,16 +207,15 @@ pub fn run_capture_stdout<S: AsRef<str>>(args: &[S], env: Option<&[(S, S)]>) -> 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let output = cmd
-        .output()
-        .context(format!("could not spawn process {}", args[0]))?;
+    let output = cmd.output().map_err(|e| {
+        OPCZoneError::ProcessErrorWithContext(format!("could not spawn process {}", args[0]), e)
+    })?;
     if output.status.success() {
         Ok(String::from_utf8(output.stdout)?)
     } else {
-        bail!(
-            "exec {:?}: failed {:?}",
-            &args,
-            String::from_utf8(output.stderr)?
-        )
+        Err(OPCZoneError::ProcessOutputErrorWithOutput(
+            args.join(" "),
+            String::from_utf8(output.stderr)?,
+        ))
     }
 }

@@ -1,23 +1,44 @@
 use std::{fs::File, path::Path, process::Command};
 
 use crate::machine::Payload;
-use anyhow::{bail, Result};
 use common::info;
+use miette::Diagnostic;
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+pub enum UtilError {
+    #[error("No dataset found for mountpoint {0}")]
+    NoDataSetFound(String),
+    #[error("Can not find vroot for zone {0}")]
+    NoVRootFound(String),
+    #[error("cannot split zonepath {0}")]
+    CannotSplitZonePath(String),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+    #[error(transparent)]
+    JSONError(#[from] serde_json::Error),
+    #[error("no snapshot allowed as target of this functioni: got {0}")]
+    NoSnapShotNameAllowed(String),
+    #[error("ZFS create failed: {0}")]
+    ZFSCreateFailed(String),
+    #[error(transparent)]
+    IllumosError(#[from] common::illumos::IllumosError),
+}
+
+type Result<T> = miette::Result<T, UtilError>;
 
 /// Get the zones dataset name from the mounts
 pub fn get_zone_dataset(zonepath: &str) -> Result<String> {
-
     for mnt in common::illumos::mounts()? {
         if &mnt.mount_point == zonepath {
             return Ok(mnt.special);
         }
     }
 
-    bail!("No dataset found for mountpoint {}", zonepath)
+    Err(UtilError::NoDataSetFound(zonepath.clone().into()))
 }
 
 /// Get the zones volume root(vroot) dataset name from mnttab(4)
-/// The vroot dataset is a delegated dataset that is used as root dataset 
+/// The vroot dataset is a delegated dataset that is used as root dataset
 /// for all volumes of the zone.
 /// The vroot datasets root is not mounted by default and only serves as
 /// a location to attach volumes to.
@@ -25,7 +46,6 @@ pub fn get_zone_dataset(zonepath: &str) -> Result<String> {
 /// occurance in mntttab(4)
 /// if somebody has added more vroot datasets to the zone bad things will happen.
 pub fn get_zone_vroot_dataset(zonename: &str) -> Result<String> {
-
     let vroot_ds_name_ending = format!("{}/vroot", zonename);
 
     for mnt in common::illumos::mounts()? {
@@ -34,7 +54,7 @@ pub fn get_zone_vroot_dataset(zonename: &str) -> Result<String> {
         }
     }
 
-    bail!("Can not find vroot for zone {}", zonename)
+    Err(UtilError::NoVRootFound(zonename.clone().into()))
 }
 
 /// Gets the parent dataset of the zones zonepath.
@@ -55,23 +75,19 @@ pub fn get_zonepath_parent_ds(zonepath: &str) -> Result<String> {
         }
     }
 
-    bail!("No dataset found for mountpoint {}", dname)
+    Err(UtilError::NoDataSetFound(dname.clone().into()))
 }
 
 pub fn get_parent_dataset_path(zonepath: &str) -> Result<&str> {
-    let (dname, _) = match common::path_split(zonepath) {
-        Some(v) => v,
-        None => bail!("could not split zonepath {}", zonepath),
-    };
+    let (dname, _) = common::path_split(zonepath)
+        .ok_or(UtilError::CannotSplitZonePath(zonepath.clone().into()))?;
+
     Ok(dname)
 }
 
 pub fn get_config(zonename: &str, zonepath: &str) -> Result<Payload> {
-    let (parent_ds_path, _) = match common::path_split(zonepath) {
-        Some(v) => v,
-        None => bail!("could not split zonepath {}", zonepath),
-    };
-
+    let (parent_ds_path, _) = common::path_split(zonepath)
+        .ok_or(UtilError::CannotSplitZonePath(zonepath.clone().into()))?;
     let config_path = Path::new(parent_ds_path)
         .join("config")
         .join(format!("{}.json", zonename));
@@ -83,13 +99,19 @@ pub fn get_config(zonename: &str, zonepath: &str) -> Result<Payload> {
     Ok(cfg)
 }
 
-
-pub fn dataset_create_with(dataset: &str, parents: bool, properties: &[(String,String)]) -> Result<()> {
+pub fn dataset_create_with(
+    dataset: &str,
+    parents: bool,
+    properties: &[(String, String)],
+) -> Result<()> {
     if dataset.contains('@') {
-        bail!("no @ allowed here");
+        return Err(UtilError::NoSnapShotNameAllowed(dataset.clone().into()));
     }
 
-    let properties: Vec<String> = properties.iter().map(|(key,value)| format!("{}={}", key, value)).collect();
+    let properties: Vec<String> = properties
+        .iter()
+        .map(|(key, value)| format!("{}={}", key, value))
+        .collect();
 
     info!("CREATE DATASET: {}", dataset);
 
@@ -109,7 +131,7 @@ pub fn dataset_create_with(dataset: &str, parents: bool, properties: &[(String,S
 
     if !zfs.status.success() {
         let errmsg = String::from_utf8_lossy(&zfs.stderr);
-        bail!("zfs create failed: {}", errmsg);
+        return Err(UtilError::ZFSCreateFailed(errmsg.to_string()));
     }
 
     Ok(())

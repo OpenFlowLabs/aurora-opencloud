@@ -1,5 +1,6 @@
 use crate::{get_zone_dataset, get_zonepath_parent_ds};
 use common::{debug, info};
+use miette::Diagnostic;
 use std::process::{Command, Stdio};
 use std::{fs::File, path::Path};
 use std::{thread, time};
@@ -11,13 +12,10 @@ const GZIP: &str = "/usr/bin/gzip";
 
 pub struct ImageManifest {}
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ImageError {
     #[error("zone error: {0}")]
     ZoneError(#[from] zone::ZoneError),
-
-    #[error("anyhow: {0}")]
-    AnyhowError(#[from] anyhow::Error),
 
     #[error("Zone is {0} in state {1} which can not be exported")]
     UnableToExport(String, String),
@@ -30,9 +28,15 @@ pub enum ImageError {
 
     #[error("Could not convert string to UTF-8")]
     UTF8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    UtilError(#[from] crate::util::UtilError),
+
+    #[error(transparent)]
+    OPCZoneError(#[from] crate::OPCZoneError),
 }
 
-pub type Result<T> = std::result::Result<T, ImageError>;
+pub type Result<T> = miette::Result<T, ImageError>;
 
 #[derive(Debug, Clone)]
 pub enum ImageType {

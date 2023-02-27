@@ -1,18 +1,23 @@
+use crate::brand::Brand;
+use crate::vmext::write_brand_config;
+use common::*;
+use miette::{Diagnostic, IntoDiagnostic, Result};
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     collections::{BTreeSet, HashMap},
     path::Path,
 };
 
-use crate::brand::Brand;
-use crate::vmext::write_brand_config;
-use anyhow::Result;
-use common::*;
-use rand::Rng;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
 const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const ZONE_IDENT_LEN: usize = 6;
+
+#[derive(Error, Debug, Diagnostic)]
+pub enum VMAPIError {
+    #[error(transparent)]
+    FSError(#[from] std::io::Error),
+}
 
 fn default_to_false() -> bool {
     false
@@ -73,7 +78,7 @@ impl BlockSize {
     }
 }
 
-fn deserialize_block_size<'de, D>(deserializer: D) -> Result<BlockSize, D::Error>
+fn deserialize_block_size<'de, D>(deserializer: D) -> std::result::Result<BlockSize, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -719,7 +724,7 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
                 ty: fs.fs_type.clone(),
                 dir: fs.target.clone(),
                 special: fs.source.clone(),
-                raw: raw,
+                raw,
                 options: fs.options.clone(),
             };
             cfg.add_fs(&f);
@@ -781,7 +786,7 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         cfg.add_net(&nic_opts);
     }
 
-    cfg.run()?;
+    cfg.run().into_diagnostic()?;
 
     info!(target: "define_vm", "defining VM: {}", zone_uuid.to_string());
 

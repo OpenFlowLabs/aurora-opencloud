@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use common::{debug, info, init_slog_logging};
+use miette::{Context, IntoDiagnostic, Result};
 use opczone::brand::Brand;
 use opczone::get_zone_dataset;
 use opczone::image::{export_image_as_dataset_format, export_zone_as_oci_format};
@@ -115,13 +115,15 @@ fn main() -> Result<()> {
                     DirBuilder::new()
                         .recursive(true)
                         .create(&location)
-                        .context("could not create bundle directory")?;
+                        .into_diagnostic()
+                        .with_context(|| "could not create bundle directory")?;
                 }
 
                 location
             } else {
                 Path::new(".").to_path_buf()
-            })?;
+            })
+            .into_diagnostic()?;
 
             let mut doc = kdl::KdlDocument::new();
             if let Some(name) = name {
@@ -140,8 +142,11 @@ fn main() -> Result<()> {
 
             debug!("writing build.kdl");
             let mut build_kdl = File::create(&location.join("build.kdl"))
+                .into_diagnostic()
                 .with_context(|| "could not write build.kdl")?;
-            build_kdl.write_all(&doc.to_string().as_bytes())?;
+            build_kdl
+                .write_all(&doc.to_string().as_bytes())
+                .into_diagnostic()?;
         }
 
         Commands::Build {
@@ -190,7 +195,8 @@ fn main() -> Result<()> {
                 Path::new(build_bundle.as_str()).to_path_buf()
             } else {
                 Path::new(".").to_path_buf()
-            })?;
+            })
+            .into_diagnostic()?;
 
             // We use opczone::run here to install the zone because the zone package gets all output before
             // returning it to stdout. opczone::run shows progress immediatly
@@ -219,11 +225,11 @@ fn main() -> Result<()> {
             zonecfg_zone.add_dataset(&zone::Dataset {
                 name: format!("{}/vroot", zone_ds_name),
             });
-            let out = zonecfg_zone.run()?;
+            let out = zonecfg_zone.run().into_diagnostic()?;
             info!("Updating zone config: {}", out);
 
             //Boot Zone
-            zoneadm.boot()?;
+            zoneadm.boot().into_diagnostic()?;
 
             //Copy Builder into zone
             let gz_runner_in_zone_path = zone_path.join("root").join(RUNNER_IN_ZONE_PATH_RELATIVE);
@@ -241,7 +247,8 @@ fn main() -> Result<()> {
                     skip_exist: true,
                     ..Default::default()
                 },
-            )?;
+            )
+            .into_diagnostic()?;
 
             //Run Builder inside zone with zlogin
             //we again use opczone::run to get all the output
@@ -253,9 +260,9 @@ fn main() -> Result<()> {
             //Cleanup Bundle
             let bundle_zonecontrol_path = build_zonecontrol_gz_path(&zonename).join("build_bundle");
             let cleanup_items = vec![bundle_zonecontrol_path.as_path(), &gz_runner_in_zone_path];
-            fs_extra::remove_items(&cleanup_items)?;
+            fs_extra::remove_items(&cleanup_items).into_diagnostic()?;
 
-            let output_dir = std::env::current_dir()?;
+            let output_dir = std::env::current_dir().into_diagnostic()?;
 
             let image_uuid = opczone::image::convert_zone_to_image(&zonename)?;
 

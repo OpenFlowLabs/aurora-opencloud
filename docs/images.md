@@ -229,5 +229,57 @@ imgadm import img://images.openindiana.org/hipster
 ## Examples
 
 ```kdl
+author "Till Wegmueller <till.wegmueller@openflowlabs.com>"
+name "zones/base"
 
+ips {
+    initialize-image
+    set-publisher "openindiana.org" "https://pkg.openindiana.org/hipster"
+    install-packages "entire" "minimal_install"
 
+    install-packages "vim"\
+        "rsync"\
+        "system/virtualization/mdata-client"\
+        "system/library/gcc-10-runtime"\
+        "system/library/g++-10-runtime"\
+        "system/library/gcc-10-compat-links"\
+        "diagnostic/diskinfo"\
+        "system/monitoring/arcstat"
+
+    uninstall-packages "minimal_install"\
+        "driver/pcmcia"\
+        "diagnostic/ddu/data"\
+        "diagnostic/ddu/library"\
+        "diagnostic/ddu/text"\
+        "service/management/sysding"\
+        "service/network/smtp/sendmail"\
+        "system/network/nis"
+    purge-history
+}
+
+user "root" "NP"
+```
+
+```kdl
+author "Till Wegmueller <till.wegmueller@openflowlabs.com>"
+name "zones/applications/garage"
+base-on "zones/base"
+
+ips {
+    set-publisher "solarm.org" "https://pkg.solarm.org"
+    install-packages "network/storage/garage"
+    purge-history
+}
+
+volume data {
+    mountpoint /var/lib/garage/data
+    (zfs)compression lz4
+    (zfs)copies 3
+}
+
+volume metadata {
+    mountpoint /var/lib/garage/meta
+    (zfs)compression lz4
+    (zfs)copies 3
+}
+```
