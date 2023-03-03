@@ -1,5 +1,5 @@
 use miette::{Context, IntoDiagnostic};
-use opcimage::definition::Document;
+use opczone::build::Document;
 use std::fs;
 
 fn main() -> miette::Result<()> {

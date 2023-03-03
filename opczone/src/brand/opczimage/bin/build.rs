@@ -1,8 +1,10 @@
-use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use common::init_slog_logging;
+use miette::{IntoDiagnostic, Result};
+use opczone::brand::ZONECONTROL_NGZ_PATH;
 use opczone::build::bundle::{BuildBundleKind, Bundle, BUILD_BUNDLE_IMAGE_PATH};
 use opczone::build::run_action;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -18,7 +20,7 @@ fn main() -> Result<()> {
 
     // Load build Instructions
     let bundle = load_build_bundle(&build_bundle)?;
-    let bundle_audit = bundle.get_audit_info();
+    //let bundle_audit = bundle.get_audit_info();
 
     println!(
         "Building Image {} by {}",
@@ -26,13 +28,25 @@ fn main() -> Result<()> {
         bundle.document.author.clone().unwrap_or("Anonymous".into())
     );
 
-    let actions = if bundle_audit.is_base_image() {
-        bundle.document.actions.clone()[1..].to_vec()
-    } else {
-        bundle.document.actions.clone()
-    };
+    let actions = bundle.document.actions.clone();
 
-    let zonename = zone::current()?;
+    let zonename = zone::current_blocking().into_diagnostic()?;
+
+    let sysconfig_path = Path::new(ZONECONTROL_NGZ_PATH).join("sysconfig.json");
+
+    let sysconfig_file = File::open(&sysconfig_path).into_diagnostic()?;
+
+    let set: libsysconfig::InstructionsSet =
+        serde_json::from_reader(sysconfig_file).into_diagnostic()?;
+
+    let mut img = libsysconfig::Image::new();
+
+    // For some Reason we get problems that the network is not online fast enough
+    // So we insert 1 second delay between comands to settle things.
+    // TODO: expose this feature to the configudarion
+    img.insert_delay(1);
+
+    img.apply_instructions(set).into_diagnostic()?;
 
     for action in actions {
         run_action("/", &zonename, &bundle, action)?;
@@ -57,10 +71,10 @@ fn search_build_bundle() -> Result<BuildBundleSearchResult> {
         });
     }
 
-    bail!("could not find any known kind of build bundle")
+    miette::bail!("could not find any known kind of build bundle")
 }
 
 fn load_build_bundle(search_result: &BuildBundleSearchResult) -> Result<Bundle> {
-    let bundle = Bundle::new(&search_result.path).map_err(|err| anyhow!("{:?}", err))?;
+    let bundle = Bundle::new(&search_result.path)?;
     Ok(bundle)
 }

@@ -297,7 +297,7 @@ pub struct OnDiskNicPayload {
     pub allowed_ips: Vec<String>,
     pub dhcp_server: bool,
     pub gateway: Option<String>,
-    // name of the VNIC
+    /// name of the VNIC
     pub interface: String,
     pub mac: Option<String>,
     pub model: Option<NicModel>,
@@ -786,7 +786,7 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         cfg.add_net(&nic_opts);
     }
 
-    cfg.run().into_diagnostic()?;
+    cfg.run_blocking().into_diagnostic()?;
 
     info!(target: "define_vm", "defining VM: {}", zone_uuid.to_string());
 

@@ -115,6 +115,14 @@ impl Bundle {
         BuildBundleAuditInfo { bundle_type: t }
     }
 
+    pub fn pop_action(&mut self) -> Option<Action> {
+        if !self.document.actions.is_empty() {
+            Some(self.document.actions.remove(0))
+        } else {
+            None
+        }
+    }
+
     pub fn save_to<P: AsRef<Path>>(&self, target: P) -> Result<()> {
         let options = fs_extra::dir::CopyOptions {
             overwrite: true,
@@ -122,9 +130,6 @@ impl Bundle {
             ..Default::default()
         };
         fs_extra::copy_items(&[&self.source_path], target, &options)?;
-
-        //TODO: Save progress information on disk
-        //TODO: Switch source path to target
 
         Ok(())
     }

@@ -3,6 +3,7 @@ pub mod build;
 pub mod dladm;
 pub mod image;
 pub mod machine;
+pub mod smf;
 mod util;
 pub mod vmext;
 
@@ -36,7 +37,7 @@ pub enum OPCZoneError {
 type Result<T> = miette::Result<T, OPCZoneError>;
 
 pub fn get_zone(zonename: &str) -> Result<zone::Zone> {
-    let zones = zone::Adm::list()?;
+    let zones = zone::Adm::list_blocking()?;
     for zone in zones {
         if zone.name() == zonename {
             return Ok(zone);

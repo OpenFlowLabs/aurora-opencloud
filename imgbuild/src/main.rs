@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use common::{debug, info, init_slog_logging};
 use miette::{Context, IntoDiagnostic, Result};
 use opczone::brand::Brand;
+use opczone::build::bundle::Bundle;
 use opczone::get_zone_dataset;
 use opczone::image::{export_image_as_dataset_format, export_zone_as_oci_format};
 use opczone::machine::AddNicPayload;
@@ -167,7 +168,7 @@ fn main() -> Result<()> {
                 ..Default::default()
             };
 
-            if let Some(nictag) = nictag {
+            if let Some(ref nictag) = nictag {
                 let mut nics = if let Some(nics) = cfg.nics {
                     nics
                 } else {
@@ -175,9 +176,9 @@ fn main() -> Result<()> {
                 };
 
                 nics.push(AddNicPayload {
-                    nic_tag: Some(nictag),
-                    ip,
-                    gateway,
+                    nic_tag: Some(nictag.clone()),
+                    ip: ip.clone(),
+                    gateway: gateway.clone(),
                     ..Default::default()
                 });
 
@@ -191,12 +192,14 @@ fn main() -> Result<()> {
 
             let mut zoneadm = zone::Adm::new(&zonename);
 
-            let bundle = std::fs::canonicalize(if let Some(build_bundle) = build_bundle {
+            let bundle_path = std::fs::canonicalize(if let Some(build_bundle) = build_bundle {
                 Path::new(build_bundle.as_str()).to_path_buf()
             } else {
                 Path::new(".").to_path_buf()
             })
             .into_diagnostic()?;
+
+            let bundle = Bundle::new(&bundle_path)?;
 
             // We use opczone::run here to install the zone because the zone package gets all output before
             // returning it to stdout. opczone::run shows progress immediatly
@@ -209,7 +212,7 @@ fn main() -> Result<()> {
                     "-q",
                     &quota.to_string(),
                     "-b",
-                    bundle.to_str().expect("non UTF-8 paths can not be used by this program please put the bundle somewhere where there is UTF-8"),
+                    bundle_path.to_str().expect("non UTF-8 paths can not be used by this program please put the bundle somewhere where there is UTF-8"),
                 ],
                 None,
             )?;
@@ -225,11 +228,11 @@ fn main() -> Result<()> {
             zonecfg_zone.add_dataset(&zone::Dataset {
                 name: format!("{}/vroot", zone_ds_name),
             });
-            let out = zonecfg_zone.run().into_diagnostic()?;
+            let out = zonecfg_zone.run_blocking().into_diagnostic()?;
             info!("Updating zone config: {}", out);
 
             //Boot Zone
-            zoneadm.boot().into_diagnostic()?;
+            zoneadm.boot_blocking().into_diagnostic()?;
 
             //Copy Builder into zone
             let gz_runner_in_zone_path = zone_path.join("root").join(RUNNER_IN_ZONE_PATH_RELATIVE);
@@ -250,6 +253,58 @@ fn main() -> Result<()> {
             )
             .into_diagnostic()?;
 
+            let mut instructions = libsysconfig::InstructionsSet::new();
+            if nictag.is_some() {
+                let ipv4_config = if let Some(ref ip) = ip {
+                    let ip = if !ip.contains("/") {
+                        ip.clone() + "/24"
+                    } else {
+                        ip.clone()
+                    };
+                    Some(libsysconfig::NetworkConfig::Static(ip.clone()))
+                } else {
+                    Some(libsysconfig::NetworkConfig::DHCP)
+                };
+
+                for nic in conf.nics {
+                    let nic_config = libsysconfig::Instruction::ConfigureNetworkAdapter {
+                        device: nic.interface.clone(),
+                        name: None,
+                        ipv4: ipv4_config.clone(),
+                        ipv6: Some(libsysconfig::NetworkConfig::DHCPStateless),
+                        primary: true,
+                        temporary: true,
+                    };
+
+                    instructions.push(nic_config);
+                }
+
+                if let Some(ref gateway) = gateway {
+                    instructions.push(libsysconfig::Instruction::AddRoute {
+                        name: "default".into(),
+                        route_match: "default".into(),
+                        gateway: gateway.clone(),
+                    });
+                }
+
+                instructions.push(libsysconfig::Instruction::SetupDNS {
+                    domain: None,
+                    search: None,
+                    nameservers: vec!["9.9.9.9".into(), "1.1.1.1".into()],
+                });
+            }
+
+            let zonecontrol_path = build_zonecontrol_gz_path(&zonename);
+
+            if !instructions.is_empty() {
+                let mut file = File::options()
+                    .write(true)
+                    .create_new(true)
+                    .open(zonecontrol_path.join("sysconfig.json"))
+                    .into_diagnostic()?;
+                serde_json::to_writer(&mut file, &instructions).into_diagnostic()?;
+            }
+
             //Run Builder inside zone with zlogin
             //we again use opczone::run to get all the output
             opczone::run(
@@ -258,13 +313,14 @@ fn main() -> Result<()> {
             )?;
 
             //Cleanup Bundle
-            let bundle_zonecontrol_path = build_zonecontrol_gz_path(&zonename).join("build_bundle");
+            let bundle_zonecontrol_path = zonecontrol_path.join("build_bundle");
             let cleanup_items = vec![bundle_zonecontrol_path.as_path(), &gz_runner_in_zone_path];
             fs_extra::remove_items(&cleanup_items).into_diagnostic()?;
 
             let output_dir = std::env::current_dir().into_diagnostic()?;
 
-            let image_uuid = opczone::image::convert_zone_to_image(&zonename)?;
+            let image_uuid =
+                opczone::image::convert_zone_to_image(&zonename, &bundle.document.name)?;
 
             match image_export_type {
                 ExportType::Dataset => export_image_as_dataset_format(image_uuid, output_dir)?,

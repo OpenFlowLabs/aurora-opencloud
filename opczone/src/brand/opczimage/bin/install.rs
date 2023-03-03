@@ -62,18 +62,18 @@ fn main() -> Result<()> {
     setup_zone_fs(&cli.zonename, &cli.zonepath, cli.brand.clone())?;
 
     if let Some(build_bundle) = cli.build_bundle {
-        let bundle = Bundle::new(&build_bundle).map_err(|err| anyhow!("{:?}", err))?;
+        let mut bundle = Bundle::new(&build_bundle).map_err(|err| anyhow!("{:?}", err))?;
         let bundle_audit = bundle.get_audit_info();
-        if !bundle_audit.is_base_image() {
-            bail!("Bundle is not safe to run in gz: Either this bundle must be based on another image or it's first action must be an ips action.")
+
+        //Install a base image by running the first IPS action in the GZ
+        if bundle_audit.is_base_image() {
+            //Run first IPS action to install base image
+            if let Some(ips_action) = bundle.pop_action() {
+                run_action(&cli.zonepath, &cli.zonename, &bundle, ips_action)?;
+            }
         }
 
-        //Run first IPS action to install base image
-        if let Some(ips_action) = bundle.document.actions.first() {
-            run_action(&cli.zonepath, &cli.zonename, &bundle, ips_action.clone())?;
-        }
-
-        //Save image bundle inside the image with first IPS action removed
+        //Save image bundle inside the image
         bundle.save_to_zone(&cli.zonepath)?;
     }
 
@@ -108,7 +108,6 @@ fn setup_dataset(
         dataset_clone(
             &snapshot,
             &root_dataset_name,
-            true,
             Some(vec!["devices=off".into(), quota_opt]),
         )?;
     } else if let Some(bundle_path) = build_bundle {
@@ -129,10 +128,28 @@ fn setup_dataset(
                 false,
                 vec![("mountpoint".to_string(), "none".to_string())].as_slice(),
             )?;
-        } else {
-            //TODO: clone base image
-            println!("Cloning the base image is not implemented yet");
-            todo!()
+        } else if let Some(image_name) = bundle.document.base_on {
+            let image_uuid = opczone::image::find_image_by_name(&image_name)?
+                .ok_or(anyhow!("no image found with name {}", &image_name))?;
+            let root_snapshot = format!("{}/{}/root@final", parent_dataset, image_uuid.to_string());
+            let vroot_snapshot =
+                format!("{}/{}/vroot@final", parent_dataset, image_uuid.to_string());
+            let quota_opt = format!("quota={}", quota_arg);
+            dataset_clone(
+                &root_snapshot,
+                &root_dataset_name,
+                Some(vec!["devices=off".into(), quota_opt.clone()]),
+            )?;
+            dataset_clone(
+                &vroot_snapshot,
+                &vroot_dataset_name,
+                Some(vec![
+                    "devices=off".into(),
+                    quota_opt,
+                    "mountpoint=none".into(),
+                    "canmount=off".into(),
+                ]),
+            )?;
         }
     } else if brand == Brand::Bhyve || brand == Brand::Propolis {
         println!("Empty VM creation not yet implemented");

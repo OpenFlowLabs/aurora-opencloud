@@ -17,3 +17,4 @@ miette = { version="4.7.1", features=["fancy"]}
 fs_extra = "1.2"
 zone = {git="https://github.com/oxidecomputer/zone.git"}
 kdl = "4.6.0"
+libsysconfig = { git = "https://github.com/Toasterson/illumos-installer.git", version = "0.1.0" }

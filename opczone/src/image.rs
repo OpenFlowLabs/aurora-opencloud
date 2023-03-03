@@ -1,6 +1,7 @@
 use crate::{get_zone_dataset, get_zonepath_parent_ds};
 use common::{debug, info};
 use miette::Diagnostic;
+use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
 use std::{fs::File, path::Path};
 use std::{thread, time};
@@ -9,6 +10,12 @@ use thiserror::Error;
 const ZONEADM: &str = "/usr/sbin/zoneadm";
 const ZFS: &str = "/usr/sbin/zfs";
 const GZIP: &str = "/usr/bin/gzip";
+const ZONEIMAGE_DIR: &str = "/etc/zimages";
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ImageRegisterFile {
+    uuid: uuid::Uuid,
+}
 
 pub struct ImageManifest {}
 
@@ -34,6 +41,9 @@ pub enum ImageError {
 
     #[error(transparent)]
     OPCZoneError(#[from] crate::OPCZoneError),
+
+    #[error(transparent)]
+    JSONError(#[from] serde_json::Error),
 }
 
 pub type Result<T> = miette::Result<T, ImageError>;
@@ -53,7 +63,7 @@ impl std::fmt::Display for ImageType {
     }
 }
 
-pub fn convert_zone_to_image(zonename: &str) -> Result<uuid::Uuid> {
+pub fn convert_zone_to_image(zonename: &str, image_name: &str) -> Result<uuid::Uuid> {
     // Make sure zone is shutdown
     let zone = crate::get_zone(zonename)?;
     match zone.state() {
@@ -112,7 +122,42 @@ pub fn convert_zone_to_image(zonename: &str) -> Result<uuid::Uuid> {
         crate::run(&[ZFS, "promote", &ds], None)?;
     }
 
+    register_image_with_name(image_name, &image_uuid)?;
+
     Ok(image_uuid)
+}
+
+pub fn register_image_with_name(name: &str, image_uuid: &uuid::Uuid) -> Result<()> {
+    let encoded_name = name.replace("/", "_");
+    let register_file_content = ImageRegisterFile {
+        uuid: image_uuid.clone(),
+    };
+    let register_file_path = Path::new(ZONEIMAGE_DIR)
+        .join(encoded_name)
+        .with_extension("json");
+    let mut register_file = File::options()
+        .write(true)
+        .create_new(true)
+        .open(register_file_path)?;
+    Ok(serde_json::to_writer_pretty(
+        &mut register_file,
+        &register_file_content,
+    )?)
+}
+
+pub fn find_image_by_name(name: &str) -> Result<Option<uuid::Uuid>> {
+    let encoded_name = name.replace("/", "_");
+
+    let register_file_path = Path::new(ZONEIMAGE_DIR)
+        .join(encoded_name)
+        .with_extension("json");
+    if !register_file_path.exists() {
+        return Ok(None);
+    }
+
+    let register_file = File::open(&register_file_path)?;
+    let register_file_content: ImageRegisterFile = serde_json::from_reader(&register_file)?;
+    Ok(Some(register_file_content.uuid))
 }
 
 pub fn export_image_as_dataset_format<P: AsRef<Path>>(

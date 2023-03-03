@@ -1,0 +1,15 @@
+<?xml version='1.0'?><!--br-->
+<!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1"><!--br-->
+<service_bundle type="profile" name="sc_install_interactive">
+    <service name="system/keymap" version="1" type="service">
+        <instance name="default">
+            <property_group name="keymap" type="system">
+                <propval name="layout" type="astring" value="US-English"/>
+            </property_group>
+        </instance>
+    </service>
+    <service name="application/graphical-login/gdm" version="1" type="service">
+       <instance name="default" enabled="true"/>
+    </service>
+</service_bundle>
+

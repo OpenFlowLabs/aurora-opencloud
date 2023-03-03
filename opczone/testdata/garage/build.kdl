@@ -1,0 +1,19 @@
+author "Till Wegmueller <till.wegmueller@openflowlabs.com>"
+name "services/garage"
+base-on "zones/base"
+
+ips {
+    set-publisher "solarm.org" "https://pkg.solarm.org/"
+    install-packages "network/storage/garage"
+    purge-history
+}
+
+volume "data" {
+    mountpoint "/var/lib/garage/data"
+}
+
+volume "metadata" {
+    mountpoint "/var/lib/garage/meta"
+}
+
+service "network/storage/garage"

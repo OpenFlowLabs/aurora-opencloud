@@ -1,15 +1,16 @@
-use self::bundle::Bundle;
-use crate::{dataset_create_with, get_zone_vroot_dataset};
-use anyhow::{bail, Result};
+use self::bundle::{Bundle, BundleError};
+use crate::{dataset_create_with, get_zone_vroot_dataset, smf::SMFError, OPCZoneError, UtilError};
 use common::info;
+use miette::{Diagnostic, IntoDiagnostic};
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, StripPrefixError},
 };
 use tera::Context;
 use thiserror::Error;
+use zone::ZoneError;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum BuildError {
     #[error("{0} not yet supported")]
     NotYetSupported(String),
@@ -17,7 +18,31 @@ pub enum BuildError {
     NoModeSpecified(String),
     #[error(transparent)]
     AnyHowError(#[from] anyhow::Error),
+    #[error("no property group name mentioned in {0} fix configuration of service {1}")]
+    NoNameForPropertyGroupInService(String, String),
+    #[error(transparent)]
+    StripPrefixError(#[from] StripPrefixError),
+    #[error(transparent)]
+    SMFError(#[from] SMFError),
+    #[error(transparent)]
+    OPCError(#[from] OPCZoneError),
+    #[error(transparent)]
+    TeraError(#[from] tera::Error),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+    #[error(transparent)]
+    BundleError(#[from] BundleError),
+    #[error(transparent)]
+    FSExtra(#[from] fs_extra::error::Error),
+    #[error(transparent)]
+    UtilError(#[from] UtilError),
+    #[error(transparent)]
+    ZoneError(#[from] ZoneError),
+    #[error("Either source or content must be defined")]
+    EitherContentOrSource,
 }
+
+type BResult<T> = miette::Result<T, BuildError>;
 
 /*
  * Hard-coded user ID and group ID for root:
@@ -56,6 +81,7 @@ pub enum Action {
     File(File),
     Perm(Dir),
     Ips(Ips),
+    Service(Service),
 }
 
 impl std::fmt::Display for Action {
@@ -79,6 +105,7 @@ impl std::fmt::Display for Action {
             Action::File(fil) => write!(f, "Action Ensure File: {}", fil.path.display()),
             Action::Perm(p) => write!(f, "Action Ensure Permissions: {}", p.path.display()),
             Action::Ips(_) => Ok(()),
+            Action::Service(svc) => write!(f, "Applying settings for service: {}", svc.fmri),
         }
     }
 }
@@ -267,8 +294,92 @@ pub struct Smf {
     pub apply_site: bool,
 }
 
-pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Action) -> Result<()> {
-    let root_string = if zonename == &zone::current()? {
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct Service {
+    #[knuffel(argument)]
+    pub fmri: String,
+    #[knuffel(property, default = true)]
+    pub enabled: bool,
+    #[knuffel(children(name = "property"))]
+    pub properties: Vec<ServiceProperty>,
+}
+
+impl Service {
+    pub fn to_smf_site_service_defintion(
+        &self,
+        bundle_name: &str,
+    ) -> miette::Result<crate::smf::ServiceBundle> {
+        let (service_name, instance_name) =
+            if let Some((svc_name, inst_name)) = self.fmri.split_once(":") {
+                if inst_name == "" {
+                    (svc_name.to_string(), String::from("default"))
+                } else {
+                    (svc_name.to_string(), inst_name.to_string())
+                }
+            } else {
+                (self.fmri.clone(), String::from("default"))
+            };
+        let mut svc = crate::smf::Service::default();
+        svc.name = service_name.clone();
+        svc.version = 1;
+        let mut instance = crate::smf::Instance::default();
+        instance.name = instance_name;
+        instance.enabled = Some(self.enabled);
+        let mut prop_map: HashMap<String, crate::smf::PropertyGroup> = HashMap::new();
+        for prop in &self.properties {
+            let (pg_name, prop_name) = prop
+                .name
+                .split_once("/")
+                .ok_or(BuildError::NoNameForPropertyGroupInService(
+                    prop.name.clone(),
+                    service_name.clone(),
+                ))
+                .into_diagnostic()?;
+            if let Some(pg) = prop_map.get_mut(pg_name) {
+                pg.values.push(crate::smf::PropVal {
+                    name: prop_name.to_string(),
+                    pb_type: crate::smf::PropValType::AString,
+                    value: prop.value.clone(),
+                })
+            } else {
+                prop_map.insert(
+                    pg_name.to_string(),
+                    crate::smf::PropertyGroup {
+                        name: pg_name.to_string(),
+                        pg_type: crate::smf::PropertyGroupType::System,
+                        values: vec![crate::smf::PropVal {
+                            name: prop_name.to_string(),
+                            pb_type: crate::smf::PropValType::AString,
+                            value: prop.value.clone(),
+                        }],
+                    },
+                );
+            }
+        }
+        instance.property_groups = prop_map
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect::<Vec<crate::smf::PropertyGroup>>();
+        svc.instances = vec![instance];
+        let b = crate::smf::ServiceBundle {
+            name: bundle_name.to_string(),
+            bundle_type: crate::smf::BundleType::Profile,
+            services: vec![svc],
+        };
+        Ok(b)
+    }
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct ServiceProperty {
+    #[knuffel(argument)]
+    pub name: String,
+    #[knuffel(argument)]
+    pub value: String,
+}
+
+pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Action) -> BResult<()> {
+    let root_string = if zonename == &zone::current_blocking()? {
         zonepath.clone().to_string()
     } else {
         format!("{}/root", zonepath)
@@ -278,7 +389,7 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
     info!("Running {}", action);
     match action {
         Action::Volume(volume) => {
-            if zone::current()? == "global".to_string() {
+            if zone::current_blocking()? == "global".to_string() {
                 panic!("Volume creation is only supported inside a zone")
             }
 
@@ -518,7 +629,7 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
                     )?;
                 }
             } else {
-                bail!("Either source or content must be defined")
+                return Err(BuildError::EitherContentOrSource);
             }
 
             Ok(())
@@ -556,23 +667,41 @@ pub fn run_action(zonepath: &str, zonename: &str, bundle: &Bundle, action: Actio
             }
             Ok(())
         }
+        Action::Service(svc) => {
+            let sanitized_name = svc.fmri.replace("/", "_");
+            let manifest = svc
+                .to_smf_site_service_defintion(
+                    (String::from("opc_service_bundle_") + &sanitized_name).as_str(),
+                )
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let site_manifest_path = String::from("/var/svc/profile/") + &sanitized_name + ".xml";
+
+            crate::smf::write_site_manifest(site_manifest_path.as_str(), &manifest)?;
+
+            crate::run(&["svccfg", "apply", &site_manifest_path], None)?;
+
+            Ok(())
+        }
     }
 }
 
-pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
+pub fn run_ips_action(root: &str, action: IpsActions) -> BResult<()> {
     info!("Running {}", action);
     match action {
-        IpsActions::InitializeImage => {
-            illumos_image_builder::pkg(&["image-create", "-F", "-z", root])
-        }
-        IpsActions::InstallPackages(pkgs) => illumos_image_builder::pkg_install(
+        IpsActions::InitializeImage => Ok(illumos_image_builder::pkg(&[
+            "image-create",
+            "-F",
+            "-z",
+            root,
+        ])?),
+        IpsActions::InstallPackages(pkgs) => Ok(illumos_image_builder::pkg_install(
             root,
             pkgs.packages
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .as_slice(),
-        ),
+        )?),
         IpsActions::InstallOptionals => {
             Err(BuildError::NotYetSupported(String::from("install optionals")).into())
         }
@@ -601,24 +730,24 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
 
             args.push(pub_props.publisher);
 
-            illumos_image_builder::pkg(
+            Ok(illumos_image_builder::pkg(
                 args.iter()
                     .map(|s| s.as_str())
                     .collect::<Vec<&str>>()
                     .as_slice(),
-            )
+            )?)
         }
         IpsActions::ApprovePublisherCA(_) => {
             Err(BuildError::NotYetSupported(String::from("approving CA")).into())
         }
-        IpsActions::UninstallPackages(pkgs) => illumos_image_builder::pkg_uninstall(
+        IpsActions::UninstallPackages(pkgs) => Ok(illumos_image_builder::pkg_uninstall(
             root,
             pkgs.packages
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .as_slice(),
-        ),
+        )?),
         IpsActions::SetVariant(variant_props) => {
             for (variant_name, variant_value) in variant_props.properties {
                 illumos_image_builder::pkg_ensure_variant(root, &variant_name, &variant_value)?;
@@ -633,7 +762,7 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
 
             Ok(())
         }
-        IpsActions::PurgeHistory => illumos_image_builder::pkg(&["-R", root, "purge-history"]),
+        IpsActions::PurgeHistory => Ok(illumos_image_builder::pkg(&["-R", root, "purge-history"])?),
         IpsActions::SetMediator(mediator_props) => {
             let mut args = vec!["-R".to_owned(), root.to_string(), "set-mediator".to_owned()];
             if let Some(imple) = mediator_props.implementation {
@@ -648,19 +777,21 @@ pub fn run_ips_action(root: &str, action: IpsActions) -> Result<()> {
 
             args.push(mediator_props.name);
 
-            illumos_image_builder::pkg(
+            Ok(illumos_image_builder::pkg(
                 args.iter()
                     .map(|s| s.as_str())
                     .collect::<Vec<&str>>()
                     .as_slice(),
-            )
+            )?)
         }
     }
 }
 
+#[cfg(test)]
 mod tests {
+
     #[test]
-    fn it_works() {
+    fn it_works() -> miette::Result<()> {
         use crate::build::{
             Action, CaCertificates, Document, Ips, IpsPublisher, Mediator, Volume, VolumeProperty,
         };
@@ -751,16 +882,51 @@ mod tests {
 
         let text = fs::read_to_string(file)
             .into_diagnostic()
-            .wrap_err_with(|| format!("cannot read {:?}", file))
-            .unwrap();
+            .wrap_err_with(|| format!("cannot read {:?}", file))?;
 
-        let config = match knuffel::parse::<Document>(file, &text) {
-            Ok(config) => config,
-            Err(e) => {
-                panic!("{:?}", miette::Report::new(e));
-            }
-        };
+        let config = knuffel::parse::<Document>(file, &text)?;
 
         assert_eq!(comparision, config);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_service_conversion() -> miette::Result<()> {
+        use super::Document;
+        use miette::{IntoDiagnostic, WrapErr};
+
+        let file = "testdata/garage/build.kdl";
+        let text = std::fs::read_to_string(file)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("cannot read {:?}", file))?;
+
+        let config = knuffel::parse::<Document>(file, &text)?;
+
+        for action in config.actions {
+            match action {
+                super::Action::Service(svc) => {
+                    let smf_manifest = svc.to_smf_site_service_defintion("test_bundle")?;
+                    let expected = crate::smf::ServiceBundle {
+                        name: "test_bundle".into(),
+                        bundle_type: crate::smf::BundleType::Profile,
+                        services: vec![crate::smf::Service {
+                            name: "network/storage/garage".into(),
+                            version: 1,
+                            service_type: crate::smf::ServiceType::Service,
+                            instances: vec![crate::smf::Instance {
+                                name: "default".into(),
+                                enabled: Some(true),
+                                property_groups: vec![],
+                            }],
+                        }],
+                    };
+                    assert_eq!(expected, smf_manifest);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 }

@@ -46,11 +46,11 @@ pub fn get_zone_dataset(zonepath: &str) -> Result<String> {
 /// occurance in mntttab(4)
 /// if somebody has added more vroot datasets to the zone bad things will happen.
 pub fn get_zone_vroot_dataset(zonename: &str) -> Result<String> {
-    let vroot_ds_name_ending = format!("{}/vroot", zonename);
+    let vroot_ds_name_ending = format!("{}/root", zonename);
 
     for mnt in common::illumos::mounts()? {
         if mnt.special.ends_with(&vroot_ds_name_ending) {
-            return Ok(mnt.special);
+            return Ok(mnt.special.replace("root", "vroot"));
         }
     }
 
