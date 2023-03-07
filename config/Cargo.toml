@@ -1,0 +1,12 @@
+[package]
+name = "config"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+miette = "5.5.0"
+serde = { version = "1.0.153", features = ["derive"] }
+thiserror = "1.0.39"
+toml = "0.7.2"

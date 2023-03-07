@@ -4,11 +4,15 @@ members = [
   "cloudcfg",
   "cloudadm",
   "tenantd",
-  "vpcd",
-  "nodeadmd",
   "vmadm",
   "imgadm",
   "imgbuild",
+  "vpcd",
+  "vpc",
   "opczone",
-  "common"
+  "common",
+  "config"
 ]
+
+[profile.test]
+default = ["test"]

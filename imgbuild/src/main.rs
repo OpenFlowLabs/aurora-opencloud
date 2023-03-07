@@ -327,7 +327,6 @@ fn main() -> Result<()> {
                 ExportType::OCI => export_zone_as_oci_format(zone, output_dir)?,
             }
         }
-        #[allow(unused_variables)]
         Commands::Publish { endpoint } => {}
     }
     Ok(())
