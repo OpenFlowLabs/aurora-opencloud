@@ -1,12 +1,14 @@
-use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use common::init_slog_logging;
-use illumos_image_builder::dataset_clone;
+use miette::{bail, miette, IntoDiagnostic, Result, WrapErr};
 use opczone::{
     brand::Brand,
     build::{bundle::Bundle, run_action},
-    dataset_create_with, get_zonepath_parent_ds,
+    get_zonepath_parent_ds,
     vmext::get_brand_config,
+};
+use solarm_utils::zfs::{
+    clone as zfs_clone, create as zfs_create, CloneRequestBuilder, CreateRequestBuilder,
 };
 use std::{
     fs::DirBuilder,
@@ -62,7 +64,7 @@ fn main() -> Result<()> {
     setup_zone_fs(&cli.zonename, &cli.zonepath, cli.brand.clone())?;
 
     if let Some(build_bundle) = cli.build_bundle {
-        let mut bundle = Bundle::new(&build_bundle).map_err(|err| anyhow!("{:?}", err))?;
+        let mut bundle = Bundle::new(&build_bundle).map_err(|err| miette!("{:?}", err))?;
         let bundle_audit = bundle.get_audit_info();
 
         //Install a base image by running the first IPS action in the GZ
@@ -104,52 +106,58 @@ fn setup_dataset(
 
     if let Some(image) = image {
         let snapshot = format!("{}/{}@final", parent_dataset, image.to_string());
-        let quota_opt = format!("quota={}", quota_arg);
-        dataset_clone(
-            &snapshot,
-            &root_dataset_name,
-            Some(vec!["devices=off".into(), quota_opt]),
-        )?;
+        let clone_request = CloneRequestBuilder::default()
+            .snapshot(snapshot)
+            .target(root_dataset_name)
+            .add_property("devices", "off")
+            .add_property("quota", &quota_arg)
+            .build()
+            .into_diagnostic()?;
+        zfs_clone(&clone_request).into_diagnostic()?;
     } else if let Some(bundle_path) = build_bundle {
-        let bundle = Bundle::new(&bundle_path).map_err(|err| anyhow!("{:?}", err))?;
+        let bundle = Bundle::new(&bundle_path).map_err(|err| miette!("{:?}", err))?;
         let audit_info = bundle.get_audit_info();
         if audit_info.is_base_image() {
-            dataset_create_with(
-                &root_dataset_name,
-                false,
-                vec![
-                    ("devices".to_string(), "off".to_string()),
-                    ("quota".to_string(), quota_arg),
-                ]
-                .as_slice(),
-            )?;
-            dataset_create_with(
-                &vroot_dataset_name,
-                false,
-                vec![("mountpoint".to_string(), "none".to_string())].as_slice(),
-            )?;
+            let create_root_request = CreateRequestBuilder::default()
+                .name(&root_dataset_name)
+                .add_property("devices", "off")
+                .add_property("quota", &quota_arg)
+                .build()
+                .into_diagnostic()?;
+            let create_vroot_request = CreateRequestBuilder::default()
+                .name(&vroot_dataset_name)
+                .add_property("mountpoint", "none")
+                .build()
+                .into_diagnostic()?;
+
+            zfs_create(&create_root_request).into_diagnostic()?;
+            zfs_create(&create_vroot_request).into_diagnostic()?;
         } else if let Some(image_name) = bundle.document.base_on {
             let image_uuid = opczone::image::find_image_by_name(&image_name)?
-                .ok_or(anyhow!("no image found with name {}", &image_name))?;
+                .ok_or(miette!("no image found with name {}", &image_name))?;
             let root_snapshot = format!("{}/{}/root@final", parent_dataset, image_uuid.to_string());
             let vroot_snapshot =
                 format!("{}/{}/vroot@final", parent_dataset, image_uuid.to_string());
-            let quota_opt = format!("quota={}", quota_arg);
-            dataset_clone(
-                &root_snapshot,
-                &root_dataset_name,
-                Some(vec!["devices=off".into(), quota_opt.clone()]),
-            )?;
-            dataset_clone(
-                &vroot_snapshot,
-                &vroot_dataset_name,
-                Some(vec![
-                    "devices=off".into(),
-                    quota_opt,
-                    "mountpoint=none".into(),
-                    "canmount=off".into(),
-                ]),
-            )?;
+            let root_clone_request = CloneRequestBuilder::default()
+                .snapshot(root_snapshot)
+                .target(root_dataset_name)
+                .add_property("devices", "off")
+                .add_property("quota", &quota_arg)
+                .build()
+                .into_diagnostic()?;
+
+            let vroot_clone_request = CloneRequestBuilder::default()
+                .snapshot(vroot_snapshot)
+                .target(vroot_dataset_name)
+                .add_property("devices", "off")
+                .add_property("quota", &quota_arg)
+                .add_property("mountpoint", "none")
+                .add_property("canmount", "off")
+                .build()
+                .into_diagnostic()?;
+
+            zfs_clone(&root_clone_request).into_diagnostic()?;
+            zfs_clone(&vroot_clone_request).into_diagnostic()?;
         }
     } else if brand == Brand::Bhyve || brand == Brand::Propolis {
         println!("Empty VM creation not yet implemented");
@@ -169,7 +177,8 @@ fn setup_zone_fs(zonename: &str, zonepath: &str, brand: Brand) -> Result<()> {
         DirBuilder::new()
             .mode(0o755)
             .create(&config_path)
-            .context(format!(
+            .into_diagnostic()
+            .wrap_err(format!(
                 "unable to create zone config directory: {}",
                 zonename
             ))?;
@@ -180,7 +189,8 @@ fn setup_zone_fs(zonename: &str, zonepath: &str, brand: Brand) -> Result<()> {
             DirBuilder::new()
                 .mode(0o755)
                 .create(&meta_path)
-                .context(format!(
+                .into_diagnostic()
+                .wrap_err(format!(
                     "unable to create zone config directory: {}",
                     zonename
                 ))?;

@@ -1,5 +1,8 @@
-use std::{path::{PathBuf, Path}, str::FromStr};
 use serde::{Deserialize, Serialize};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use thiserror::Error;
 
 // States
@@ -47,11 +50,10 @@ pub fn build_zonemeta_gz_path(zonename: &str) -> PathBuf {
 }
 
 #[derive(Debug, Error)]
-pub enum BrandError{
+pub enum BrandError {
     #[error("brand {0} is unknown")]
-    NotKnown(String)
+    NotKnown(String),
 }
-
 
 #[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -60,6 +62,7 @@ pub enum Brand {
     Image,
     Native,
     Propolis,
+    NativeBhyve,
 }
 
 impl FromStr for Brand {
@@ -67,11 +70,11 @@ impl FromStr for Brand {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "bhyve" => Ok(Brand::Bhyve),
+            "bhyve" => Ok(Brand::NativeBhyve),
             "image" => Ok(Brand::Image),
             "native" => Ok(Brand::Native),
             "propolis" => Ok(Brand::Propolis),
-            x => Err(BrandError::NotKnown(x.clone().to_string()))
+            x => Err(BrandError::NotKnown(x.clone().to_string())),
         }
     }
 }
@@ -83,6 +86,7 @@ impl std::fmt::Display for Brand {
             Brand::Image => write!(f, "opczimage"),
             Brand::Native => write!(f, "opcnative"),
             Brand::Propolis => write!(f, "opcpropolis"),
+            Brand::NativeBhyve => write!(f, "bhyve"),
         }
     }
 }

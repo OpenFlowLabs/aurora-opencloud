@@ -37,7 +37,7 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |v|
         v.customize ["modifyvm", :id, "--memory", mem]
         v.customize ["modifyvm", :id, "--cpus", cpus]
-
+        v.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
         v.customize ["storagectl", :id, "--name", "SATA Controller", "--hostiocache", "on"]
         # Enable following line, if oi-userland directory is on non-rotational
         # drive (e.g. SSD). (This could be automated, but with all those storage

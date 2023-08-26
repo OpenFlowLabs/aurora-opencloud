@@ -1,7 +1,7 @@
-use crate::brand::Brand;
 use crate::vmext::write_brand_config;
+use crate::{brand::Brand, vmext::VMExtError};
 use common::*;
-use miette::{Diagnostic, IntoDiagnostic, Result};
+use miette::Diagnostic;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,6 +9,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     path::Path,
 };
+use zone::ZoneError;
 
 const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const ZONE_IDENT_LEN: usize = 6;
@@ -17,7 +18,15 @@ const ZONE_IDENT_LEN: usize = 6;
 pub enum VMAPIError {
     #[error(transparent)]
     FSError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    VMExtError(#[from] VMExtError),
+
+    #[error(transparent)]
+    ZoneError(#[from] ZoneError),
 }
+
+type Result<T> = miette::Result<T, VMAPIError>;
 
 fn default_to_false() -> bool {
     false
@@ -742,7 +751,10 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
 
     let capped_memory = if let Some(mut max_physical_memory) = &payload.max_physical_memory {
         if max_physical_memory < payload.ram {
-            if payload.brand == Brand::Propolis || payload.brand == Brand::Bhyve {
+            if payload.brand == Brand::Propolis
+                || payload.brand == Brand::Bhyve
+                || payload.brand == Brand::NativeBhyve
+            {
                 max_physical_memory = payload.ram + 1024;
             } else {
                 max_physical_memory = payload.ram;
@@ -786,7 +798,7 @@ pub fn define_vm(payload: CreatePayload) -> Result<OnDiskPayload> {
         cfg.add_net(&nic_opts);
     }
 
-    cfg.run_blocking().into_diagnostic()?;
+    cfg.run_blocking()?;
 
     info!(target: "define_vm", "defining VM: {}", zone_uuid.to_string());
 

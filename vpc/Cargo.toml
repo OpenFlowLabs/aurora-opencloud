@@ -12,7 +12,7 @@ ipnet = { version = "2.7.1", features = ["serde", "schemars"] }
 miette = "5.5.0"
 schemars = { version = "0.8.12", features = ["uuid", "url"] }
 serde = { version = "1.0.152", features = ["derive"] }
-serde_json = {verison = "1.0.94", optional = true }
+serde_json = {version = "1.0.94", optional = true }
 testdir = {version = "0.7.2", optional = true }
 thiserror = "1.0.38"
 uuid = { version = "1.3.0", features = ["serde", "v4"] }

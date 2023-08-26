@@ -9,6 +9,10 @@ BUILD_DIR="${HOME}/.cargo/target/debug"
 BRAND_DIR="/usr/lib/brand"
 BRAND_CONFIG_FILES=(config.xml platform.xml)
 
+BASE_DIR=$(dirname $0)
+
+export PKG_CONFIG_PATH_x86_64_unknown_illumos="/usr/lib/pkgconfig:$(realpath $BASE_DIR/../)"
+
 for bin in ${OPCBINARIES[@]}; do
   cargo build --package opczone --bin $bin
 done

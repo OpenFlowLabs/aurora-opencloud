@@ -40,6 +40,14 @@ enum Command {
         #[arg(short, long)]
         tenant: Option<uuid::Uuid>,
     },
+    Install {
+        #[arg(short, long)]
+        tenant: Option<uuid::Uuid>,
+        name: String,
+        external_nic: String,
+        image_uuid: uuid::Uuid,
+    },
+    //TODO: Uninstall command
     Get {
         #[arg(short, long)]
         tenant: Option<uuid::Uuid>,
@@ -142,6 +150,17 @@ fn main() -> miette::Result<()> {
         Command::GetNewAddress { tenant, name } => vpcd::VPCAction::GetNewAddress {
             tenant: tenant.unwrap_or(uuid::Builder::nil().into_uuid()),
             name,
+        },
+        Command::Install {
+            tenant,
+            name,
+            external_nic,
+            image_uuid,
+        } => vpcd::VPCAction::Install {
+            tenant,
+            name,
+            external_nic,
+            image_uuid,
         },
     };
 

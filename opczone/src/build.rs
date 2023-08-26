@@ -5,6 +5,7 @@ use miette::{Diagnostic, IntoDiagnostic};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf, StripPrefixError},
+    str::FromStr,
 };
 use tera::Context;
 use thiserror::Error;
@@ -40,6 +41,10 @@ pub enum BuildError {
     ZoneError(#[from] ZoneError),
     #[error("Either source or content must be defined")]
     EitherContentOrSource,
+    #[error(transparent)]
+    ParseIntError(#[from] std::num::ParseIntError),
+    #[error("invalid disk type")]
+    InvalidDiskKind,
 }
 
 type BResult<T> = miette::Result<T, BuildError>;
@@ -61,8 +66,91 @@ pub struct Document {
     pub version: i32,
     #[knuffel(child, unwrap(argument))]
     pub base_on: Option<String>,
+    #[knuffel(child)]
+    pub vm_specs: Option<VMImageSpec>,
     #[knuffel(children)]
     pub actions: Vec<Action>,
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct VMImageSpec {
+    #[knuffel(child, unwrap(argument))]
+    pub cpus: Option<i32>,
+    #[knuffel(child, unwrap(argument))]
+    memory: Option<String>,
+    #[knuffel(children(name = "disk"))]
+    pub disks: Vec<VMImageDisk>,
+}
+
+impl VMImageSpec {
+    pub fn get_memory(&self) -> BResult<Option<HumanReadableBytes>> {
+        if let Some(memory) = &self.memory {
+            let value = HumanReadableBytes::from_str(&memory)?;
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(knuffel::Decode, Clone, Debug, PartialEq)]
+pub struct VMImageDisk {
+    #[knuffel(type_name)]
+    disk_kind: VMDiskKind,
+    #[knuffel(child, unwrap(property))]
+    size: Option<String>,
+}
+
+#[derive(knuffel::DecodeScalar, Clone, Debug, PartialEq)]
+pub enum VMDiskKind {
+    Vioscsi,
+    Virtio,
+}
+
+impl FromStr for VMDiskKind {
+    type Err = BuildError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "vioscsi" => Ok(Self::Vioscsi),
+            "virtio" => Ok(Self::Virtio),
+            _ => Err(BuildError::InvalidDiskKind),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum HumanReadableBytes {
+    Bytes(i32),
+    Kilo(i32),
+    Mega(i32),
+    Giga(i32),
+    Tera(i32),
+    Peta(i32),
+}
+
+impl FromStr for HumanReadableBytes {
+    type Err = BuildError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if let Some(magnitude) = s.chars().last() {
+            let numbers: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+            if !magnitude.is_ascii_digit() {
+                match magnitude {
+                    'K' | 'k' => Self::Kilo(numbers.parse()?),
+                    'M' | 'm' => Self::Mega(numbers.parse()?),
+                    'G' | 'g' => Self::Giga(numbers.parse()?),
+                    'T' | 't' => Self::Tera(numbers.parse()?),
+                    'P' | 'p' => Self::Peta(numbers.parse()?),
+                    _ => Self::Bytes(s.parse()?),
+                }
+            } else {
+                Self::Bytes(s.parse()?)
+            }
+        } else {
+            Self::Bytes(s.parse()?)
+        })
+    }
 }
 
 #[derive(knuffel::Decode, Clone, Debug, PartialEq)]
@@ -809,6 +897,7 @@ mod tests {
             name: "my-image".into(),
             version: 1,
             base_on: Some("img://openindiana.org/hipster".into()),
+            vm_specs: None,
             actions: vec![
                 Action::Volume(Volume {
                     name: "data".into(),

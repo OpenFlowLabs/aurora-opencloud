@@ -1,11 +1,9 @@
-use std::{fs::remove_dir_all, path::Path};
-
-use anyhow::{bail, Result};
 use clap::Parser;
 use common::{init_slog_logging, warn};
-use illumos_image_builder::dataset_remove;
+use miette::{bail, IntoDiagnostic, Result};
 use opczone::get_zonepath_parent_ds;
 use std::process::Command;
+use std::{fs::remove_dir_all, path::Path};
 
 #[derive(Parser)]
 struct Cli {
@@ -29,7 +27,9 @@ fn main() -> Result<()> {
 
     let zone_control_dir = format!("/var/zonecontrol/{}", &cli.zonename);
 
-    match dataset_remove(&zone_dataset_name) {
+    let zone_ds = solarm_utils::zfs::open(&zone_dataset_name).into_diagnostic()?;
+
+    match zone_ds.destroy() {
         Ok(_) => {}
         Err(_) => {
             warn!("DESTROY FAILED trying again forced");
@@ -38,7 +38,8 @@ fn main() -> Result<()> {
                 .arg("destroy")
                 .arg("-rfF")
                 .arg(&zone_dataset_name)
-                .output()?;
+                .output()
+                .into_diagnostic()?;
             if !zfs.status.success() {
                 let errmsg = String::from_utf8_lossy(&zfs.stderr);
                 if errmsg.trim().ends_with("dataset does not exist") {
@@ -51,12 +52,12 @@ fn main() -> Result<()> {
 
     let zonepath = Path::new(&cli.zonepath);
     if zonepath.exists() {
-        remove_dir_all(zonepath)?;
+        remove_dir_all(zonepath).into_diagnostic()?;
     }
 
     let zone_control_path = Path::new(&zone_control_dir);
     if zone_control_path.exists() {
-        remove_dir_all(zone_control_path)?;
+        remove_dir_all(zone_control_path).into_diagnostic()?;
     }
 
     Ok(())

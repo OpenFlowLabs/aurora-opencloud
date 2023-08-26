@@ -19,11 +19,6 @@ name "oibldofhipster"
 
 image "img://openindiana.org/hvm/hipster/202304"
 
-specs {
-	cpus 4
-	memory "16G"
-}
-
 // This gets saved with the vm and can be used as storage to give humans informations
 metadata key="value" {
 	keyint 1
@@ -31,7 +26,9 @@ metadata key="value" {
 }
 
 // bHyve is the default
-(bhyve)vm {
+(bhyve)vm-specs {
+	cpus 4
+	memory "16G"
 	(vioscsi)disk "vda" {
 		size "50G"
 	}

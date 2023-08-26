@@ -1,6 +1,6 @@
-use anyhow::Result;
 use clap::Parser;
 use common::init_slog_logging;
+use miette::{IntoDiagnostic, Result};
 use std::{fs::copy, path::Path};
 
 #[derive(Parser)]
@@ -21,7 +21,8 @@ fn main() -> Result<()> {
     copy(
         Path::new("/etc/zones").join(format!("{}.xml", &cli.zonename)),
         Path::new(&cli.zonepath).join("SUNWdetached.xml"),
-    )?;
+    )
+    .into_diagnostic()?;
 
     Ok(())
 }

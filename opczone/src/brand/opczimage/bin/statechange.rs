@@ -1,8 +1,8 @@
 use std::{fs::DirBuilder, os::unix::fs::DirBuilderExt};
 
-use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
 use common::{debug, init_slog_logging};
+use miette::{bail, IntoDiagnostic, Result, WrapErr};
 use opczone::{
     brand::{
         build_zonecontrol_gz_path, build_zonemeta_gz_path, ZONE_CMD_BOOT, ZONE_CMD_HALT,
@@ -236,7 +236,8 @@ fn setup_zone_helper_directories(zonename: &str, zonepath: &str) -> Result<()> {
             .mode(0o755)
             .recursive(true)
             .create(&zonecontrol_path)
-            .context(format!(
+            .into_diagnostic()
+            .wrap_err(format!(
                 "unable to create zone control directory {}",
                 zonename
             ))?;
@@ -249,7 +250,8 @@ fn setup_zone_helper_directories(zonename: &str, zonepath: &str) -> Result<()> {
             .mode(0o755)
             .recursive(true)
             .create(&zonemeta_path)
-            .context(format!("unable to create zone meta directory {}", zonename))?;
+            .into_diagnostic()
+            .wrap_err(format!("unable to create zone meta directory {}", zonename))?;
     }
 
     Ok(())

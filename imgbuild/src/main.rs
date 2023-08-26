@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use common::{debug, info, init_slog_logging};
 use miette::{Context, IntoDiagnostic, Result};
 use opczone::brand::Brand;
-use opczone::build::bundle::Bundle;
+use opczone::build::bundle::{BuildBundleType, Bundle};
 use opczone::get_zone_dataset;
 use opczone::image::{export_image_as_dataset_format, export_zone_as_oci_format};
 use opczone::machine::AddNicPayload;
@@ -159,12 +159,27 @@ fn main() -> Result<()> {
             build_bundle,
             image_export_type,
         } => {
+            let bundle_path = std::fs::canonicalize(if let Some(build_bundle) = build_bundle {
+                Path::new(build_bundle.as_str()).to_path_buf()
+            } else {
+                Path::new(".").to_path_buf()
+            })
+            .into_diagnostic()?;
+
+            let bundle = Bundle::new(&bundle_path)?;
+
             let mut cfg = opczone::machine::CreatePayload {
-                brand: Brand::Image,
-                zfs_io_priority: 30,
-                ram,
-                quota,
+                brand: match bundle.get_audit_info().kind() {
+                    BuildBundleType::BaseImage => Brand::Image,
+                    BuildBundleType::Image => Brand::Image,
+                    BuildBundleType::Bhyve => Brand::Bhyve,
+                    BuildBundleType::Propolis => Brand::Propolis,
+                    BuildBundleType::NativeBhyve => Brand::NativeBhyve,
+                },
                 max_physical_memory: Some(ram),
+                quota,
+                ram,
+                zfs_io_priority: 30,
                 ..Default::default()
             };
 
@@ -191,15 +206,6 @@ fn main() -> Result<()> {
             let zonename = conf.uuid.to_string();
 
             let mut zoneadm = zone::Adm::new(&zonename);
-
-            let bundle_path = std::fs::canonicalize(if let Some(build_bundle) = build_bundle {
-                Path::new(build_bundle.as_str()).to_path_buf()
-            } else {
-                Path::new(".").to_path_buf()
-            })
-            .into_diagnostic()?;
-
-            let bundle = Bundle::new(&bundle_path)?;
 
             // We use opczone::run here to install the zone because the zone package gets all output before
             // returning it to stdout. opczone::run shows progress immediatly

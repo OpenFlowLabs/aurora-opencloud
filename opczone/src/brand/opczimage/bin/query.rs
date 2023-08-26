@@ -1,5 +1,5 @@
-use anyhow::Result;
 use clap::{Parser, ValueEnum};
+use miette::Result;
 
 #[derive(ValueEnum, Debug, Clone)] // ArgEnum here
 #[clap(rename_all = "kebab_case")]
