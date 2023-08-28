@@ -1,8 +1,7 @@
 [workspace]
 
 members = [
-  "cloudcfg",
-  "cloudadm",
+  "crates/*",
   "tenantd",
   "vmadm",
   "imgadm",

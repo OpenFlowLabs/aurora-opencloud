@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
+tracing = { version = "0.1.37", features = ["log"] }
+tracing-subscriber = { version = "0.3.17", features = ["json", "serde", "serde_json", "env-filter"] }
 tonic = "0.7"
 prost = "0.10"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
@@ -15,12 +16,12 @@ osshkeys = { version = "0.6.2" }
 openssl = "0.10"
 serde = { version = "1", features=["derive"] }
 serde_yaml = "0.8"
-anyhow = "1"
 thiserror = "1"
 clap = { version = "3.2", features = ["derive", "env"]}
 dirs = "4"
 prettytable-rs = "^0.8"
 hex = "0.4"
+miette = { version = "5.10.0", features = ["fancy"] }
 
 [build-dependencies]
 tonic-build = "0.7"

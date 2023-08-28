@@ -3,7 +3,7 @@ use std::io;
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let proto_path = Path::new("../proto/tenant.proto");
+    let proto_path = Path::new("../../proto/tenant.proto");
     let out_dir = Path::new("./src/rpc");
 
     if !Path::exists(out_dir) {
@@ -16,6 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn compile_protos(proto: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
     std::env::set_var("PROTOC", "/usr/local/bin/protoc");
 
     let proto_path: &Path = proto.as_ref();
