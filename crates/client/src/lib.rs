@@ -8,14 +8,13 @@ use pasetors::footer::Footer;
 use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
 use pasetors::version4::V4;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tonic::metadata::errors::InvalidMetadataValue;
 
-pub static AUTH_FILE_LOCATION: &str = "aurora-opencloud/principals.yaml";
-pub static CONFIG_FILE_LOCATION: &str = "aurora-opencloud/config.yaml";
+pub static AUTH_FILE_LOCATION: &str = "opc/principals.yaml";
+pub static CONFIG_FILE_LOCATION: &str = "opc/config.yaml";
 pub static CURRENT_AUTH_ENTRY_KEY: &str = "principals.current";
 pub static AUTHORIZATION_HEADER: &str = "authorization";
 
@@ -53,6 +52,12 @@ pub enum Error {
 
     #[error(transparent)]
     TonicStatus(#[from] tonic::Status),
+
+    #[error(transparent)]
+    ConfigError(#[from] config::ConfigError),
+
+    #[error("config key: {0} can not be set")]
+    UnsetableConfig(String),
 }
 
 pub type Result<T> = miette::Result<T, Error>;
@@ -73,28 +78,63 @@ pub fn get_config_location() -> PathBuf {
     }
 }
 
-pub fn read_config() -> Result<HashMap<String, String>> {
-    let config_file_path = get_config_location();
-    if !config_file_path.exists() {
-        return Ok(HashMap::new());
-    }
-    let config_file = File::open(config_file_path)?;
-    let config_struct: HashMap<String, String> = serde_yaml::from_reader(&config_file)?;
-    Ok(config_struct)
+#[derive(Serialize, Deserialize)]
+pub struct ClientConfig {
+    pub api: APIDestination,
+    pub principals: PrincipalConfig,
 }
 
-pub fn write_config(config_struct: HashMap<String, String>) -> Result<()> {
+#[derive(Deserialize, Serialize)]
+pub struct PrincipalConfig {
+    pub current: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct APIDestination {
+    pub host: String,
+    pub port: String,
+    pub secure_connection: bool,
+}
+
+impl APIDestination {
+    pub fn get_uri(&self) -> String {
+        if self.secure_connection {
+            format!("https://{}:{}", self.host, self.port)
+        } else {
+            format!("http://{}:{}", self.host, self.port)
+        }
+    }
+}
+
+pub fn read_config(
+    host: Option<String>,
+    port: Option<String>,
+    ssl: Option<bool>,
+) -> Result<ClientConfig> {
+    let config_file_path = get_config_location().to_string_lossy().to_string();
+    let cfg = config::Config::builder()
+        .set_default("api.host", "127.0.0.1")?
+        .set_default("api.port", "50051")?
+        .set_default("api.secure_connection", false)?
+        .set_default(CURRENT_AUTH_ENTRY_KEY, "")?
+        .add_source(config::File::with_name(&config_file_path).required(false))
+        .set_override_option("api.host", host)?
+        .set_override_option("api.port", port)?
+        .set_override_option("api.secure_connection", ssl)?
+        .build()?;
+
+    let cc = cfg.try_deserialize()?;
+    Ok(cc)
+}
+
+pub fn write_config(config_struct: ClientConfig) -> Result<()> {
     let config_file_path = get_config_location();
     if !config_file_path.exists() {
         let mut config_dir = config_file_path.clone();
         config_dir.pop();
         std::fs::create_dir_all(config_dir)?;
     }
-    let mut config_file = if !config_file_path.exists() {
-        File::create(config_file_path)
-    } else {
-        File::open(config_file_path)
-    }?;
+    let mut config_file = File::create(config_file_path)?;
     serde_yaml::to_writer(&mut config_file, &config_struct)?;
     Ok(())
 }
@@ -116,11 +156,7 @@ pub fn write_auth_config(auth_struct: Vec<AuthEntry>) -> Result<()> {
         auth_dir.pop();
         std::fs::create_dir_all(auth_dir)?;
     }
-    let mut auth_file = if !auth_file_path.exists() {
-        File::create(auth_file_path)
-    } else {
-        File::open(auth_file_path)
-    }?;
+    let mut auth_file = File::create(auth_file_path)?;
     serde_yaml::to_writer(&mut auth_file, &auth_struct)?;
     Ok(())
 }
