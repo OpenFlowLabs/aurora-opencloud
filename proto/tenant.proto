@@ -21,6 +21,25 @@ service Tenant {
   rpc RemovePublicKey(RemovePublicKeyRequest) returns (StatusResponse);
   rpc DeletePrincipal(DeletePrincipalRequest) returns (StatusResponse);
   rpc GetServerPublicKey(google.protobuf.Empty) returns (PublicKeyResponse);
+
+  // Role Permissions API
+  rpc AddRole(RoleRequest) returns (StatusResponse);
+  rpc RemoveRole(RoleRequest) returns (StatusResponse);
+
+  // Principal Attributes API
+  rpc AddAttribute(AttributeRequest) returns (StatusResponse);
+  rpc RemoveAttribute(AttributeRequest) returns (StatusResponse);
+}
+
+message AttributeRequest {
+  string principal = 1;
+  string attribute = 2;
+  optional string value = 3;
+}
+
+message RoleRequest {
+  string ident = 1;
+  string principal = 2;
 }
 
 message DeletePrincipalRequest {

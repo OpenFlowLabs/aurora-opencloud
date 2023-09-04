@@ -1,0 +1,3 @@
+db_uri: postgres://postgres:postgres@localhost/tenantd
+addr: '[::1]:50000'
+private_key: ae48042739ea8090119341026564cf559233e891df37bbe85cc8c265563d80a3

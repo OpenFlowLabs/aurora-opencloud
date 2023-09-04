@@ -1,0 +1,82 @@
+syntax = "proto3";
+package node;
+import "google/protobuf/empty.proto";
+
+service NodeRepo {
+	// API to define nodes 
+	rpc ListNodes(google.protobuf.Empty) returns (ListNodesResponse);
+	rpc DefineNode(DefineNodeRequest) returns (StatusResponse);
+	rpc UpdateNode(UpdateNodeRequest) returns (StatusResponse);
+	rpc DeleteNode(NodeId) returns (StatusResponse);
+	rpc ShowNode(NodeId) returns (NodeDetails);
+	rpc ConnectNode(NodeConnectRequest) returns (StatusResponse);
+	rpc SendNodeStatus(NodeConnectRequest) returns (StatusResponse);
+	rpc SendLogs(stream LogSendRequest) returns (google.protobuf.Empty);
+	rpc viewLogs(LogViewRequest) returns (stream LogViewStream);
+}
+
+message LogViewRequest {
+	string id = 1;
+}
+
+message LogViewStream {
+	repeated string message = 1;
+}
+
+message LogSendRequest {
+	string message = 1;
+}
+
+message NodeConnectRequest {
+	string id = 1;
+}
+
+message StatusResponse {
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+  }
+  Status code = 1;
+  optional string message = 2;
+	optional NodeShortInfo node = 3;
+}
+
+message NodeId {
+	string id = 1;
+}
+
+message UpdateNodeRequest {
+	string id = 1;
+	string content = 2;
+}
+
+message DefineNodeRequest {
+	string content = 1;
+}
+
+message ListNodeResponse {
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+  }
+  Status code = 1;
+  optional string message = 2;
+	repeated NodeShortInfo nodes = 1;
+}
+
+message NodeDetails {
+	string id = 1;
+	string name = 2;
+	string cpu = 3;
+	string memory = 4;
+	string primary_ip = 5;
+	string definition = 6;
+}
+
+message NodeShortInfo {
+	string id = 1;
+	string name = 2;
+	string cpu = 3;
+	string memory = 4;
+	string primary_ip = 5;
+}
