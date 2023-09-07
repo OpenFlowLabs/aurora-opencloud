@@ -16,13 +16,17 @@ service Tenant {
   // Principal Public API
   rpc ListPrincipals(ListPrincipalRequest) returns (ListPrincipalResponse);
   rpc GetPrincipal(GetPrincipalRequest) returns (PrincipalResponse);
-  rpc CreatePrincipal(CreatePrincipalRequest) returns (StatusResponse);
+  rpc CreatePrincipal(CreatePrincipalRequest) returns (PrincipalResponse);
+  rpc GetPrincipalAuth(GetPrincipalAuthRequest) returns (GetPrincipalAuthResponse);
+  rpc RefreshToken(google.protobuf.Empty) returns (RefreshTokenResponse);
+  rpc RevokeToken(RevokeTokenRequest) returns (StatusResponse);
   rpc AddPublicKeyToPrincipal(AddPublicKeyRequest) returns (StatusResponse);
   rpc RemovePublicKey(RemovePublicKeyRequest) returns (StatusResponse);
   rpc DeletePrincipal(DeletePrincipalRequest) returns (StatusResponse);
   rpc GetServerPublicKey(google.protobuf.Empty) returns (PublicKeyResponse);
 
   // Role Permissions API
+  rpc DefineRole(DefineRoleRequest) returns (StatusResponse);
   rpc AddRole(RoleRequest) returns (StatusResponse);
   rpc RemoveRole(RoleRequest) returns (StatusResponse);
 
@@ -37,9 +41,35 @@ message AttributeRequest {
   optional string value = 3;
 }
 
+message DefineRoleRequest {
+  string ident = 1;
+  repeated string permissions = 2;
+}
+
 message RoleRequest {
   string ident = 1;
-  string principal = 2;
+  string tenant = 2;
+  string principal = 3;
+}
+
+message RevokeTokenRequest {
+  string principal_name = 1;
+  string tenant_id = 2;
+}
+
+message RefreshTokenResponse {
+  string token = 1;
+}
+
+message GetPrincipalAuthResponse {
+  bool encrypted = 1;
+  string token = 2;
+}
+
+message GetPrincipalAuthRequest {  
+  string principal_name = 1;
+  string tenant_id = 2;
+  bool encrypted = 3;
 }
 
 message DeletePrincipalRequest {
@@ -71,7 +101,9 @@ message DeleteTenantRequest {
 }
 
 message CreateTenantRequest {
-  string name = 1;
+  string id = 1;
+  string name = 2;
+  optional string parent = 3;
 }
 
 message StatusResponse {
@@ -89,7 +121,13 @@ message PingMsg {
 }
 
 message PongMsg {
-  string pong = 1;
+  enum Authenticated {
+    NONE = 0;
+    SUCESSFULL = 1;
+    FAILED = 2;
+  }
+  Authenticated auth_status = 1;
+  optional string message = 2;
 }
 
 

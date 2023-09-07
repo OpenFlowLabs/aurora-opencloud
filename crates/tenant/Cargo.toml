@@ -9,6 +9,7 @@ edition = "2021"
 biscuit-auth = { version = "4.0.0", features = ["serde", "uuid"] }
 clap = { version = "4.4.2", features = ["derive"] }
 config = "0.13"
+derivative = "2.2.0"
 miette = { version = "5.10.0", features = ["fancy"] }
 prost = "0.11.0"
 prost-types = "0.11.0"

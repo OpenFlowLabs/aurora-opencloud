@@ -10,11 +10,53 @@ pub struct AttributeRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DefineRoleRequest {
+    #[prost(string, tag = "1")]
+    pub ident: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "2")]
+    pub permissions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoleRequest {
     #[prost(string, tag = "1")]
     pub ident: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
+    pub tenant: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
     pub principal: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RevokeTokenRequest {
+    #[prost(string, tag = "1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub tenant_id: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RefreshTokenResponse {
+    #[prost(string, tag = "1")]
+    pub token: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrincipalAuthResponse {
+    #[prost(bool, tag = "1")]
+    pub encrypted: bool,
+    #[prost(string, tag = "2")]
+    pub token: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrincipalAuthRequest {
+    #[prost(string, tag = "1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "3")]
+    pub encrypted: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -66,7 +108,11 @@ pub struct DeleteTenantRequest {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateTenantRequest {
     #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -125,8 +171,52 @@ pub struct PingMsg {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PongMsg {
-    #[prost(string, tag = "1")]
-    pub pong: ::prost::alloc::string::String,
+    #[prost(enumeration = "pong_msg::Authenticated", tag = "1")]
+    pub auth_status: i32,
+    #[prost(string, optional, tag = "2")]
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `PongMsg`.
+pub mod pong_msg {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Authenticated {
+        None = 0,
+        Sucessfull = 1,
+        Failed = 2,
+    }
+    impl Authenticated {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Authenticated::None => "NONE",
+                Authenticated::Sucessfull => "SUCESSFULL",
+                Authenticated::Failed => "FAILED",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "NONE" => Some(Self::None),
+                "SUCESSFULL" => Some(Self::Sucessfull),
+                "FAILED" => Some(Self::Failed),
+                _ => None,
+            }
+        }
+    }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -284,6 +374,27 @@ pub mod tenant_server {
         async fn create_principal(
             &self,
             request: tonic::Request<super::CreatePrincipalRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PrincipalResponse>,
+            tonic::Status,
+        >;
+        async fn get_principal_auth(
+            &self,
+            request: tonic::Request<super::GetPrincipalAuthRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetPrincipalAuthResponse>,
+            tonic::Status,
+        >;
+        async fn refresh_token(
+            &self,
+            request: tonic::Request<()>,
+        ) -> std::result::Result<
+            tonic::Response<super::RefreshTokenResponse>,
+            tonic::Status,
+        >;
+        async fn revoke_token(
+            &self,
+            request: tonic::Request<super::RevokeTokenRequest>,
         ) -> std::result::Result<tonic::Response<super::StatusResponse>, tonic::Status>;
         async fn add_public_key_to_principal(
             &self,
@@ -305,6 +416,10 @@ pub mod tenant_server {
             tonic::Status,
         >;
         /// Role Permissions API
+        async fn define_role(
+            &self,
+            request: tonic::Request<super::DefineRoleRequest>,
+        ) -> std::result::Result<tonic::Response<super::StatusResponse>, tonic::Status>;
         async fn add_role(
             &self,
             request: tonic::Request<super::RoleRequest>,
@@ -721,7 +836,7 @@ pub mod tenant_server {
                         T: Tenant,
                     > tonic::server::UnaryService<super::CreatePrincipalRequest>
                     for CreatePrincipalSvc<T> {
-                        type Response = super::StatusResponse;
+                        type Response = super::PrincipalResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -745,6 +860,139 @@ pub mod tenant_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreatePrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/GetPrincipalAuth" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPrincipalAuthSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::GetPrincipalAuthRequest>
+                    for GetPrincipalAuthSvc<T> {
+                        type Response = super::GetPrincipalAuthResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetPrincipalAuthRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).get_principal_auth(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPrincipalAuthSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RefreshToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct RefreshTokenSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<()>
+                    for RefreshTokenSvc<T> {
+                        type Response = super::RefreshTokenResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).refresh_token(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RefreshTokenSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RevokeToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct RevokeTokenSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::RevokeTokenRequest>
+                    for RevokeTokenSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RevokeTokenRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).revoke_token(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RevokeTokenSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -924,6 +1172,48 @@ pub mod tenant_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetServerPublicKeySvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/DefineRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct DefineRoleSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::DefineRoleRequest>
+                    for DefineRoleSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DefineRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move { (*inner).define_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = DefineRoleSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

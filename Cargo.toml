@@ -2,7 +2,6 @@
 
 members = [
   "crates/*",
-  "tenantd",
   "vmadm",
   "imgadm",
   "imgbuild",

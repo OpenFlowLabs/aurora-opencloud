@@ -1,4 +1,29 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AttributeRequest {
+    #[prost(string, tag="1")]
+    pub principal: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub attribute: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="3")]
+    pub value: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DefineRoleRequest {
+    #[prost(string, tag="1")]
+    pub ident: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag="2")]
+    pub permissions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RoleRequest {
+    #[prost(string, tag="1")]
+    pub ident: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub principal: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeletePrincipalRequest {
     #[prost(string, tag="1")]
     pub principal_name: ::prost::alloc::string::String,
@@ -68,8 +93,20 @@ pub struct PingMsg {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PongMsg {
-    #[prost(string, tag="1")]
-    pub pong: ::prost::alloc::string::String,
+    #[prost(enumeration="pong_msg::Authenticated", tag="1")]
+    pub auth_status: i32,
+    #[prost(string, optional, tag="2")]
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `PongMsg`.
+pub mod pong_msg {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+    #[repr(i32)]
+    pub enum Authenticated {
+        None = 0,
+        Sucessfull = 1,
+        Failed = 2,
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListTenantRequest {
@@ -456,6 +493,97 @@ pub mod tenant_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        /// Role Permissions API
+        pub async fn define_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DefineRoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/DefineRole");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn add_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/AddRole");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn remove_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/tenant.Tenant/RemoveRole");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        /// Principal Attributes API
+        pub async fn add_attribute(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AttributeRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/AddAttribute",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn remove_attribute(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AttributeRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/RemoveAttribute",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -517,6 +645,28 @@ pub mod tenant_server {
             &self,
             request: tonic::Request<()>,
         ) -> Result<tonic::Response<super::PublicKeyResponse>, tonic::Status>;
+        /// Role Permissions API
+        async fn define_role(
+            &self,
+            request: tonic::Request<super::DefineRoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn add_role(
+            &self,
+            request: tonic::Request<super::RoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn remove_role(
+            &self,
+            request: tonic::Request<super::RoleRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        /// Principal Attributes API
+        async fn add_attribute(
+            &self,
+            request: tonic::Request<super::AttributeRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        async fn remove_attribute(
+            &self,
+            request: tonic::Request<super::AttributeRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct TenantServer<T: Tenant> {
@@ -1019,6 +1169,190 @@ pub mod tenant_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetServerPublicKeySvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/DefineRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct DefineRoleSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::DefineRoleRequest>
+                    for DefineRoleSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DefineRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).define_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = DefineRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/AddRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct AddRoleSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::RoleRequest>
+                    for AddRoleSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).add_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AddRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RemoveRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemoveRoleSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::RoleRequest>
+                    for RemoveRoleSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).remove_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemoveRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/AddAttribute" => {
+                    #[allow(non_camel_case_types)]
+                    struct AddAttributeSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::AttributeRequest>
+                    for AddAttributeSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AttributeRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).add_attribute(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AddAttributeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RemoveAttribute" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemoveAttributeSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<super::AttributeRequest>
+                    for RemoveAttributeSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AttributeRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).remove_attribute(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemoveAttributeSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -1,3 +1,4 @@
+use biscuit_auth::PrivateKey;
 use clap::{Parser, Subcommand};
 use miette::IntoDiagnostic;
 use tenant::*;
@@ -21,12 +22,7 @@ enum Commands {
     /// Start serving requests
     Serve { listen: Option<String> },
     /// Create a token used for when you don't have an account yet
-    CreateInitToken {
-        // Optional limit token to tenant
-        // if you enter a name here the token will be limited to create a tenant with the name only
-        // and allow the user to create a Principal
-        tenant: Option<String>,
-    },
+    CreateInitToken,
 }
 
 #[tokio::main]
@@ -54,7 +50,14 @@ async fn main() -> miette::Result<()> {
             debug!(?cfg, "Starting Tenant Service");
             listen(cfg).await.into_diagnostic()?;
         }
-        Commands::CreateInitToken { tenant } => {}
+        Commands::CreateInitToken => {
+            let cfg = read_config(args.config).into_diagnostic()?;
+
+            debug!("Generating Initialization token");
+            let token = generate_init_token(&cfg).into_diagnostic()?;
+            println!("Use this token to initialize the root tenant:");
+            println!("{}", token.to_base64().into_diagnostic()?);
+        }
     }
 
     Ok(())
