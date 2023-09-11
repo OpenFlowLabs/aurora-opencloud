@@ -1,4 +1,3 @@
-use biscuit_auth::PrivateKey;
 use clap::{Parser, Subcommand};
 use miette::IntoDiagnostic;
 use tenant::*;
