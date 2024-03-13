@@ -532,7 +532,9 @@ pub mod tenant_server {
                             request: tonic::Request<super::PingMsg>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).ping(request).await };
+                            let fut = async move {
+                                <T as Tenant>::ping(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -575,7 +577,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).list_tenants(request).await
+                                <T as Tenant>::list_tenants(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -618,7 +620,9 @@ pub mod tenant_server {
                             request: tonic::Request<super::GetTenantRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).get_tenant(request).await };
+                            let fut = async move {
+                                <T as Tenant>::get_tenant(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -663,7 +667,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).create_tenant(request).await
+                                <T as Tenant>::create_tenant(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -709,7 +713,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).delete_tenant(request).await
+                                <T as Tenant>::delete_tenant(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -755,7 +759,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).list_principals(request).await
+                                <T as Tenant>::list_principals(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -801,7 +805,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).get_principal(request).await
+                                <T as Tenant>::get_principal(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -847,7 +851,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).create_principal(request).await
+                                <T as Tenant>::create_principal(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -893,7 +897,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).get_principal_auth(request).await
+                                <T as Tenant>::get_principal_auth(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -934,7 +938,7 @@ pub mod tenant_server {
                         fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).refresh_token(request).await
+                                <T as Tenant>::refresh_token(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -980,7 +984,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).revoke_token(request).await
+                                <T as Tenant>::revoke_token(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1026,7 +1030,8 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).add_public_key_to_principal(request).await
+                                <T as Tenant>::add_public_key_to_principal(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -1072,7 +1077,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).remove_public_key(request).await
+                                <T as Tenant>::remove_public_key(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1118,7 +1123,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).delete_principal(request).await
+                                <T as Tenant>::delete_principal(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1159,7 +1164,7 @@ pub mod tenant_server {
                         fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).get_server_public_key(request).await
+                                <T as Tenant>::get_server_public_key(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1202,7 +1207,9 @@ pub mod tenant_server {
                             request: tonic::Request<super::DefineRoleRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).define_role(request).await };
+                            let fut = async move {
+                                <T as Tenant>::define_role(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1244,7 +1251,9 @@ pub mod tenant_server {
                             request: tonic::Request<super::RoleRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).add_role(request).await };
+                            let fut = async move {
+                                <T as Tenant>::add_role(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1286,7 +1295,9 @@ pub mod tenant_server {
                             request: tonic::Request<super::RoleRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).remove_role(request).await };
+                            let fut = async move {
+                                <T as Tenant>::remove_role(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -1329,7 +1340,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).add_attribute(request).await
+                                <T as Tenant>::add_attribute(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1373,7 +1384,7 @@ pub mod tenant_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).remove_attribute(request).await
+                                <T as Tenant>::remove_attribute(&inner, request).await
                             };
                             Box::pin(fut)
                         }

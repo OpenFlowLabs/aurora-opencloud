@@ -10,6 +10,18 @@
       <sourceFolder url="file://$MODULE_DIR$/userd/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tenantd/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/config/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/tenant/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/vmdef/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/imgadm/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/imgbuild/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/opczone/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/opczone/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vmadm/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vpc/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vpc/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/vpcd/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/cloudcfg/target" />
       <excludeFolder url="file://$MODULE_DIR$/common/target" />

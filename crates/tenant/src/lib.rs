@@ -267,7 +267,6 @@ async fn handle_create_tenant(db: &DatabaseConnection, request: CreateTenantRequ
 impl Tenant for TenantSvc {
     #[doc = " A small rpc to ping to make sure we are connected, but also"]
     #[doc = " to help make a fast development function"]
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     #[instrument(name = "ping_handler", skip(self))]
     async fn ping(
@@ -303,7 +302,6 @@ impl Tenant for TenantSvc {
     }
 
     #[doc = " Tenant Public API"]
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn list_tenants(
         &self,
@@ -312,7 +310,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn get_tenant(
         &self,
@@ -321,7 +318,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn create_tenant(
         &self,
@@ -340,7 +336,6 @@ impl Tenant for TenantSvc {
         }))
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn delete_tenant(
         &self,
@@ -350,7 +345,6 @@ impl Tenant for TenantSvc {
     }
 
     #[doc = " Principal Public API"]
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn list_principals(
         &self,
@@ -359,7 +353,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn get_principal(
         &self,
@@ -368,7 +361,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn create_principal(
         &self,
@@ -377,7 +369,27 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
+    async fn get_principal_auth(
+        &self,
+        request: tonic::Request<GetPrincipalAuthRequest>,
+    ) -> std::result::Result<tonic::Response<GetPrincipalAuthResponse>, tonic::Status> {
+        todo!()
+    }
+
+    async fn refresh_token(
+        &self,
+        request: tonic::Request<()>,
+    ) -> std::result::Result<tonic::Response<RefreshTokenResponse>, tonic::Status> {
+        todo!()
+    }
+
+    async fn revoke_token(
+        &self,
+        request: tonic::Request<RevokeTokenRequest>,
+    ) -> std::result::Result<tonic::Response<StatusResponse>, tonic::Status> {
+        todo!()
+    }
+
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn add_public_key_to_principal(
         &self,
@@ -386,7 +398,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn remove_public_key(
         &self,
@@ -395,7 +406,6 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn delete_principal(
         &self,
@@ -404,12 +414,18 @@ impl Tenant for TenantSvc {
         todo!()
     }
 
-    #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     async fn get_server_public_key(
         &self,
         request: tonic::Request<()>,
     ) -> std::result::Result<tonic::Response<PublicKeyResponse>, tonic::Status> {
+        todo!()
+    }
+
+    async fn define_role(
+        &self,
+        request: tonic::Request<DefineRoleRequest>,
+    ) -> std::result::Result<tonic::Response<StatusResponse>, tonic::Status> {
         todo!()
     }
 
@@ -438,34 +454,6 @@ impl Tenant for TenantSvc {
     async fn remove_attribute(
         &self,
         request: tonic::Request<AttributeRequest>,
-    ) -> std::result::Result<tonic::Response<StatusResponse>, tonic::Status> {
-        todo!()
-    }
-
-    async fn define_role(
-        &self,
-        request: tonic::Request<DefineRoleRequest>,
-    ) -> std::result::Result<tonic::Response<StatusResponse>, tonic::Status> {
-        todo!()
-    }
-
-    async fn get_principal_auth(
-        &self,
-        request: tonic::Request<GetPrincipalAuthRequest>,
-    ) -> std::result::Result<tonic::Response<GetPrincipalAuthResponse>, tonic::Status> {
-        todo!()
-    }
-
-    async fn refresh_token(
-        &self,
-        request: tonic::Request<()>,
-    ) -> std::result::Result<tonic::Response<RefreshTokenResponse>, tonic::Status> {
-        todo!()
-    }
-
-    async fn revoke_token(
-        &self,
-        request: tonic::Request<RevokeTokenRequest>,
     ) -> std::result::Result<tonic::Response<StatusResponse>, tonic::Status> {
         todo!()
     }

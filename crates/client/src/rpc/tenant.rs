@@ -24,6 +24,34 @@ pub struct RoleRequest {
     pub principal: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RevokeTokenRequest {
+    #[prost(string, tag="1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RefreshTokenResponse {
+    #[prost(string, tag="1")]
+    pub token: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrincipalAuthResponse {
+    #[prost(bool, tag="1")]
+    pub encrypted: bool,
+    #[prost(string, tag="2")]
+    pub token: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrincipalAuthRequest {
+    #[prost(string, tag="1")]
+    pub principal_name: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(bool, tag="3")]
+    pub encrypted: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeletePrincipalRequest {
     #[prost(string, tag="1")]
     pub principal_name: ::prost::alloc::string::String,
@@ -67,7 +95,11 @@ pub struct DeleteTenantRequest {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateTenantRequest {
     #[prost(string, tag="1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="3")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StatusResponse {
@@ -401,7 +433,7 @@ pub mod tenant_client {
         pub async fn create_principal(
             &mut self,
             request: impl tonic::IntoRequest<super::CreatePrincipalRequest>,
-        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+        ) -> Result<tonic::Response<super::PrincipalResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -414,6 +446,63 @@ pub mod tenant_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/tenant.Tenant/CreatePrincipal",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn get_principal_auth(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetPrincipalAuthRequest>,
+        ) -> Result<tonic::Response<super::GetPrincipalAuthResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/GetPrincipalAuth",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn refresh_token(
+            &mut self,
+            request: impl tonic::IntoRequest<()>,
+        ) -> Result<tonic::Response<super::RefreshTokenResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/RefreshToken",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn revoke_token(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RevokeTokenRequest>,
+        ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/tenant.Tenant/RevokeToken",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -628,6 +717,18 @@ pub mod tenant_server {
         async fn create_principal(
             &self,
             request: tonic::Request<super::CreatePrincipalRequest>,
+        ) -> Result<tonic::Response<super::PrincipalResponse>, tonic::Status>;
+        async fn get_principal_auth(
+            &self,
+            request: tonic::Request<super::GetPrincipalAuthRequest>,
+        ) -> Result<tonic::Response<super::GetPrincipalAuthResponse>, tonic::Status>;
+        async fn refresh_token(
+            &self,
+            request: tonic::Request<()>,
+        ) -> Result<tonic::Response<super::RefreshTokenResponse>, tonic::Status>;
+        async fn revoke_token(
+            &self,
+            request: tonic::Request<super::RevokeTokenRequest>,
         ) -> Result<tonic::Response<super::StatusResponse>, tonic::Status>;
         async fn add_public_key_to_principal(
             &self,
@@ -992,7 +1093,7 @@ pub mod tenant_server {
                         T: Tenant,
                     > tonic::server::UnaryService<super::CreatePrincipalRequest>
                     for CreatePrincipalSvc<T> {
-                        type Response = super::StatusResponse;
+                        type Response = super::PrincipalResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -1014,6 +1115,121 @@ pub mod tenant_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreatePrincipalSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/GetPrincipalAuth" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPrincipalAuthSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::GetPrincipalAuthRequest>
+                    for GetPrincipalAuthSvc<T> {
+                        type Response = super::GetPrincipalAuthResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetPrincipalAuthRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).get_principal_auth(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPrincipalAuthSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RefreshToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct RefreshTokenSvc<T: Tenant>(pub Arc<T>);
+                    impl<T: Tenant> tonic::server::UnaryService<()>
+                    for RefreshTokenSvc<T> {
+                        type Response = super::RefreshTokenResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).refresh_token(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RefreshTokenSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/tenant.Tenant/RevokeToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct RevokeTokenSvc<T: Tenant>(pub Arc<T>);
+                    impl<
+                        T: Tenant,
+                    > tonic::server::UnaryService<super::RevokeTokenRequest>
+                    for RevokeTokenSvc<T> {
+                        type Response = super::StatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RevokeTokenRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).revoke_token(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RevokeTokenSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

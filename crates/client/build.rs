@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 pub fn compile_protos(proto: impl AsRef<Path>, out_dir: impl AsRef<Path>) -> io::Result<()> {
     #[cfg(target_os = "macos")]
-    std::env::set_var("PROTOC", "/usr/local/bin/protoc");
+    std::env::set_var("PROTOC", "/opt/homebrew/bin/protoc");
 
     let proto_path: &Path = proto.as_ref();
 

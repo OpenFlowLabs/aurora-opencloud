@@ -8,22 +8,22 @@ edition = "2021"
 [dependencies]
 biscuit-auth = { version = "4.0.0", features = ["serde", "uuid"] }
 clap = { version = "4.4.2", features = ["derive"] }
-config = "0.13"
+config = "0.14.0"
 derivative = "2.2.0"
-miette = { version = "5.10.0", features = ["fancy"] }
-prost = "0.11.0"
-prost-types = "0.11.0"
+miette = { version = "7.2.0", features = ["fancy"] }
+prost = "0.12.3"
+prost-types = "0.12.3"
 sea-orm = { version = "0.12.2", features = ["sqlx-all", "sqlx", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "0.12.2", default-features = false, features = ["with-json", "sqlx-postgres", "sqlx-mysql", "runtime-tokio-rustls", "with-uuid"] }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_yaml = "0.9.25"
 thiserror = "1.0.47"
 tokio = { version = "1.32.0", features = ["full", "tracing"] }
-tonic = { version = "0.9.2", features = ["gzip"] }
+tonic = { version = "0.11.0", features = ["gzip"] }
 tracing = { version = "0.1.37", features = ["log"] }
 tracing-subscriber = { version = "0.3.17", features = ["json", "env-filter"] }
 uuid = { version = "1.4.1", features = ["serde", "v4"] }
 
 [build-dependencies]
-tonic-build = { version = "0.9.2", features = ["prost"] }
+tonic-build = { version = "0.11.0", features = ["prost"] }
 
